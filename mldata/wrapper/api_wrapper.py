@@ -7,18 +7,23 @@ __author__ = 'Iván de Paz Centeno'
 
 class APIWrapper(object):
 
-    def __init__(self, token, api_url=None):
+    def __init__(self, token, api_url=None, token_info=None):
         if api_url is None:
             api_url = "http://localhost:5000"
 
         self.api_url = api_url
         self.token = token
-        self._update_token_info()
+
+        if token_info is None:
+            self._update_token_info()
+        else:
+            self.token_info = token_info
 
     def _update_token_info(self):
         try:
             token_info = requests.get("{}/tokens/{}".format(self.api_url, self.token), params={'_tok': self.token}).json()
         except Exception as ex:
+            print(ex)
             raise Exception("Backend could not be contacted!")
 
         self.token_info = token_info
@@ -33,6 +38,10 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Error while retrieving data.")
+
         return response.json()
 
     def _get_binary(self, rel_url, extra_data=None, json_data=None):
@@ -56,7 +65,7 @@ class APIWrapper(object):
 
         data = dict(extra_data)
         data['_tok'] = self.token
-        response = requests.post("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
+        response = requests.put("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
         return response.json()
 
     def _post_json(self, rel_url, extra_data=None, json_data=None):

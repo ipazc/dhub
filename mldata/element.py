@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 from mldata.wrapper.api_wrapper import APIWrapper
 
 __author__ = 'Iván de Paz Centeno'
@@ -8,9 +9,10 @@ __author__ = 'Iván de Paz Centeno'
 class Element(APIWrapper):
 
     def __init__(self, title, description, tags, http_ref, id=None, dataset_owner=None, token=None,
-                 binary_interpreter=None):
-        super().__init__(token)
+                 binary_interpreter=None, token_info=None):
+        super().__init__(token, token_info=token_info)
         self.data = {'title': title, 'description': description, 'tags': tags, 'http_ref': http_ref}
+        self.has_content = False
         self.dataset_owner = dataset_owner
         self.binary_interpreter = binary_interpreter
         self.token = token
@@ -43,7 +45,10 @@ class Element(APIWrapper):
     def set_ref(self, new_http_ref):
         self.data['http_ref'] = new_http_ref
 
-    def content(self, interpret=True):
+    def get_content(self, interpret=True):
+        if not self.has_content:
+            return None
+
         content = self._get_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id))
 
         if self.binary_interpreter is not None and interpret:
@@ -55,23 +60,32 @@ class Element(APIWrapper):
         if self.binary_interpreter is not None and interpret:
             content = self.binary_interpreter.deinterpret(content)
 
-
-        result = self._put_binary("datasets/{}/elements".format(self.dataset_owner.get_url_prefix()), binary=content)
+        result = self._put_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id), binary=content)
+        self.refresh()
         return result
 
     def update(self):
         self._patch_json("datasets/{}/elements/{}".format(self.dataset_owner.get_url_prefix(), self._id),
                          json_data=self.data)
+        self.refresh()
 
     def __str__(self):
         return "{} {}".format(self._id, str(self.data))
 
     @classmethod
-    def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None):
+    def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None, token_info=None):
 
         element = cls(definition['title'], definition['description'], definition['tags'],
                       definition['http_ref'], id=definition['_id'], token=token,
-                      binary_interpreter=binary_interpreter, dataset_owner=dataset_owner)
+                      binary_interpreter=binary_interpreter, dataset_owner=dataset_owner, token_info=token_info)
 
         element.comments_count = definition['comments_count']
+        element.has_content = definition['has_content']
         return element
+
+    def refresh(self):
+        definition = self._get_json("datasets/{}/elements/{}".format(self.dataset_owner.get_url_prefix(), self.get_id()))
+
+        self.data = {k: definition[k] for k in ['title', 'description', 'tags', 'http_ref']}
+        self.comments_count = definition['comments_count']
+        self.has_content = definition['has_content']
