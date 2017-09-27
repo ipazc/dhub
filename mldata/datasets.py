@@ -15,7 +15,17 @@ class Datasets(APIWrapper):
         return len(self.datasets)
 
     def __getitem__(self, item) -> Dataset:
-        return self.datasets[item]
+        result = None
+        try:
+            index = int(item)
+            result = self.values()[index]
+        except ValueError as ex:
+            pass
+
+        if result is None:
+            result = self.datasets[item]
+
+        return result
 
     def add_dataset(self, url_prefix, title, description, reference, tags):
         result = self._post_json("datasets", json_data={
@@ -37,10 +47,20 @@ class Datasets(APIWrapper):
         self.refresh()
 
     def __delitem__(self, key):
-        if key not in self.keys():
-            return
+        try:
+            index = int(key)
+            item_key = self.keys()[index]
+        except ValueError as ex:
+            item_key = None
+            pass
 
-        self._delete_json("datasets/{}".format(key))
+        if item_key is None:
+            if key not in self.keys():
+                return
+            else:
+                item_key = key
+
+        self._delete_json("datasets/{}".format(item_key))
         self.refresh()
 
     def __iter__(self):

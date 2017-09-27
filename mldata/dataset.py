@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import csv
+import json
 import os
 from mldata.element import Element
 from mldata.wrapper.api_wrapper import APIWrapper
@@ -86,9 +88,9 @@ class Dataset(APIWrapper):
                 content_bytes = f.read()
 
             if self.binary_interpreter is None:
-                raise Exception("Can't interpret the content of the URI: The interpreter is missing.")
-
-            content = self.binary_interpreter.cipher(content_bytes)
+                content = content_bytes
+            else:
+                content = self.binary_interpreter.cipher(content_bytes)
 
         result = self._post_json("datasets/{}/elements".format(self.get_url_prefix()), json_data={
             'title': title,
@@ -164,6 +166,77 @@ class Dataset(APIWrapper):
 
     def __str__(self):
         return str(self.data)
+
+    def save_to_folder(self, folder, metadata_format="json", elements_extension=None):
+        try:
+            os.mkdir(folder)
+        except Exception as ex:
+            pass
+
+        format_saver = {
+            "csv": self.__save_csv,
+            "json": self.__save_json
+        }
+
+        if elements_extension is not None and elements_extension.startswith("."):
+            elements_extension = elements_extension[1:]
+
+        if metadata_format not in format_saver:
+            raise Exception("format {} for metadata not supported.".format(metadata_format))
+
+        print("Collecting metadata...")
+        metadata = {}
+        for element in self:
+            if elements_extension is None:
+                element_id = element.get_id()
+            else:
+                element_id = "{}.{}".format(element.get_id(), elements_extension)
+
+            metadata[element_id] = {
+                'id': element.get_id(),
+                'title': element.get_title(),
+                'description': element.get_description(),
+                'http_ref': element.get_ref(),
+                'tags': element.get_tags(),
+            }
+
+        format_saver[metadata_format](folder, metadata)
+        print("Saved metadata in format {}".format(metadata_format))
+
+        content_folder = os.path.join(folder, "content")
+        try:
+            os.mkdir(content_folder)
+        except FileExistsError as ex:
+            pass
+
+        print("Fetching elements...")
+
+        count = len(metadata)
+        it = -1
+        for filename, values in metadata.items():
+            it += 1
+            id = values['id']
+
+            binary_content = self[id].get_content(interpret=False)
+            with open(os.path.join(content_folder, filename), "wb") as f:
+                f.write(binary_content)
+
+            print("\rProgress: {}%".format(round(it/(count+0.0001)*100, 2)), end="", flush=True)
+
+        print("\rProgress: 100%", end="", flush=True)
+        print("\nFinished")
+
+    def __save_json(self, folder, metadata):
+        with open(os.path.join(folder, "metadata.json"), "w") as f:
+            json.dump(metadata, f, indent=4)
+
+    def __save_csv(self, folder, metadata):
+        with open(os.path.join(folder, "metadata.csv"), 'w', newline="") as f:
+            writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            writer.writerow(['file_name', 'id', 'title', 'description', 'http_ref', 'tags'])
+
+            for k, v in metadata.items():
+                writer.writerow([k, v['id'], v['title'], v['description'], v['http_ref'], ";".join(v['tags'])])
 
     def refresh(self):
         dataset_data = self._get_json("datasets/{}".format(self.get_url_prefix()))

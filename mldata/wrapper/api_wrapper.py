@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from time import sleep
 import requests
 
 __author__ = 'Iván de Paz Centeno'
@@ -37,7 +38,12 @@ class APIWrapper(object):
 
         data = dict(extra_data)
         data['_tok'] = self.token
+
         response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
+
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
 
         if response.status_code not in [200, 201]:
             raise Exception("Error while retrieving data.")
@@ -54,6 +60,11 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
+
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
+
         return response.content
 
     def _put_binary(self, rel_url, extra_data=None, binary=None):
@@ -66,6 +77,10 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.put("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.put("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
+
         return response.json()
 
     def _post_json(self, rel_url, extra_data=None, json_data=None):
@@ -78,6 +93,10 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.post("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.post("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+
         return response.json()
 
     def _patch_json(self, rel_url, extra_data=None, json_data=None):
@@ -90,6 +109,9 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.patch("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.patch("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
         return response.json()
 
     def _delete_json(self, rel_url, extra_data=None, json_data=None):
@@ -102,4 +124,7 @@ class APIWrapper(object):
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.delete("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+        while response.status_code == 429:
+            sleep(2)
+            response = requests.delete("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
         return response.json()
