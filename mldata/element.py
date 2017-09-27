@@ -52,13 +52,13 @@ class Element(APIWrapper):
         content = self._get_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id))
 
         if self.binary_interpreter is not None and interpret:
-            content = self.binary_interpreter.interpret(content)
+            content = self.binary_interpreter.cipher(content)
 
         return content
 
     def set_content(self, content, interpret=True):
         if self.binary_interpreter is not None and interpret:
-            content = self.binary_interpreter.deinterpret(content)
+            content = self.binary_interpreter.decipher(content)
 
         result = self._put_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id), binary=content)
         self.refresh()

@@ -14,7 +14,7 @@ class Datasets(APIWrapper):
     def __len__(self):
         return len(self.datasets)
 
-    def __getitem__(self, item):
+    def __getitem__(self, item) -> Dataset:
         return self.datasets[item]
 
     def add_dataset(self, url_prefix, title, description, reference, tags):
@@ -44,6 +44,10 @@ class Datasets(APIWrapper):
         self.refresh()
 
     def __iter__(self):
+        """
+        :rtype: Dataset
+        :return:
+        """
         for url, d in self.datasets.items():
             yield d
 

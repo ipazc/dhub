@@ -1,31 +1,36 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from mldata.datasets import Datasets
+from mldata.interpreters.bin_image import BinImage
 
 __author__ = 'Iván de Paz Centeno'
 
 
-datasets = Datasets("260d59be41e14ed2ac28484380314178")
+token = "260d59be41e14ed2ac28484380314178"
+
+
+
+
+datasets = Datasets(token)
 dataset = datasets["ipazc/example"]
+
+dataset.set_binary_interpreter(BinImage())
+
+#image = Image.open("/home/ivan/example1.jpg")
+
+#element = dataset.add_element("image3", "example for image 3", ["example"], "none", "/home/ivan/example1.jpg")
+
+#print(element)
+
+#image = element.get_content()
+#image.show()
+
 print(len(dataset))
-
-#dataset["59ca8973b9a7c05218470839"].set_content(b"hello!")
-ids = [element.get_id() for element in dataset]
-print(ids)
-
-for id in ids:
-    print(id)
-    del dataset[id]
-    print("deleted")
-
-print(dataset.get_url_prefix())
 print(dataset.keys())
 
-print(len(dataset))
+for element in dataset:
+    content = element.get_content()
+    if content is not None:
+        content.show()
 
-dataset.keys()
-#print(datasets)
 
-#dataset = datasets.add_dataset("example", "this is an example of dataset", ["tag1", "tag2"], "example", "no reference")
-
-#print(dataset)

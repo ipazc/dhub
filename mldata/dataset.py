@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+import os
 from mldata.element import Element
 from mldata.wrapper.api_wrapper import APIWrapper
+from mldata.interpreters.interpreter import Interpreter
 
 __author__ = 'Iván de Paz Centeno'
 
@@ -9,7 +11,9 @@ __author__ = 'Iván de Paz Centeno'
 class Dataset(APIWrapper):
     def __init__(self, url_prefix, title, description, reference, tags, token=None, binary_interpreter=None, token_info=None):
         self.data = {}
+
         self.binary_interpreter = binary_interpreter
+        """:type : Interpreter"""
 
         if "/" in url_prefix:
             self.data['url_prefix'] = url_prefix
@@ -71,7 +75,20 @@ class Dataset(APIWrapper):
         dataset.elements_count = definition['elements_count']
         return dataset
 
-    def add_element(self, title, description, tags, http_ref, content, interpret=True):
+    def add_element(self, title:str, description:str, tags:list, http_ref:str, content, interpret=True) -> Element:
+
+        if type(content) is str:
+            # content is a URI
+            if not os.path.exists(content):
+                raise Exception("content must be a binary data or a URI to a file.")
+
+            with open(content, "rb") as f:
+                content_bytes = f.read()
+
+            if self.binary_interpreter is None:
+                raise Exception("Can't interpret the content of the URI: The interpreter is missing.")
+
+            content = self.binary_interpreter.cipher(content_bytes)
 
         result = self._post_json("datasets/{}/elements".format(self.get_url_prefix()), json_data={
             'title': title,
@@ -86,11 +103,12 @@ class Dataset(APIWrapper):
         element.set_content(content, interpret)
         return element
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> Element:
         try:
             result = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
             raise_exception = False
         except Exception as ex:
+            result = None
             raise_exception = True
 
         if raise_exception:
@@ -103,6 +121,10 @@ class Dataset(APIWrapper):
         self.refresh()
 
     def __iter__(self):
+        """
+        :rtype: Element
+        :return:
+        """
         page = 0
 
         # Two buffers to go through the elements. The second buffer will be filled whenever the first buffer is
