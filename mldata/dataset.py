@@ -165,9 +165,11 @@ class Dataset(APIWrapper):
         return self.elements_count
 
     def __str__(self):
-        return str(self.data)
+        data = dict(self.data)
+        data['num_elements'] = len(self)
+        return str(data)
 
-    def save_to_folder(self, folder, metadata_format="json", elements_extension=None):
+    def save_to_folder(self, folder, metadata_format="json", elements_extension=None, use_numbered_ids=False, only_metadata=False):
         try:
             os.mkdir(folder)
         except Exception as ex:
@@ -186,11 +188,19 @@ class Dataset(APIWrapper):
 
         print("Collecting metadata...")
         metadata = {}
+        id = -1
+
         for element in self:
-            if elements_extension is None:
-                element_id = element.get_id()
+
+            if use_numbered_ids:
+                id += 1
             else:
-                element_id = "{}.{}".format(element.get_id(), elements_extension)
+                id = element.get_id()
+
+            if elements_extension is None:
+                element_id = id
+            else:
+                element_id = "{}.{}".format(id, elements_extension)
 
             metadata[element_id] = {
                 'id': element.get_id(),
@@ -202,6 +212,9 @@ class Dataset(APIWrapper):
 
         format_saver[metadata_format](folder, metadata)
         print("Saved metadata in format {}".format(metadata_format))
+
+        if only_metadata:
+            return
 
         content_folder = os.path.join(folder, "content")
         try:
@@ -216,7 +229,6 @@ class Dataset(APIWrapper):
         for filename, values in metadata.items():
             it += 1
             id = values['id']
-
             binary_content = self[id].get_content(interpret=False)
             with open(os.path.join(content_folder, filename), "wb") as f:
                 f.write(binary_content)
@@ -230,13 +242,30 @@ class Dataset(APIWrapper):
         with open(os.path.join(folder, "metadata.json"), "w") as f:
             json.dump(metadata, f, indent=4)
 
+        with open(os.path.join(folder, "dataset_info.json"), "w") as f:
+            data = dict(self.data)
+            data['num_elements'] = len(self)
+            data['tags'] = data['tags']
+            json.dump(data, f, indent=4)
+
     def __save_csv(self, folder, metadata):
         with open(os.path.join(folder, "metadata.csv"), 'w', newline="") as f:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-            writer.writerow(['file_name', 'id', 'title', 'description', 'http_ref', 'tags'])
+            headers = ['file_name', 'id', 'title', 'description', 'http_ref', 'tags']
+            writer.writerow(headers)
 
             for k, v in metadata.items():
-                writer.writerow([k, v['id'], v['title'], v['description'], v['http_ref'], ";".join(v['tags'])])
+                v['tags'] = "'{}'".format(";".join(v['tags']))
+                writer.writerow([k] + [v[h] for h in headers if h != 'file_name'])
+
+        with open(os.path.join(folder, "dataset_info.csv"), "w", newline="") as f:
+            writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
+            data = dict(self.data)
+            data['num_elements'] = len(self)
+            data['tags'] = "'{}'".format(";".join(data['tags']))
+            headers = ['url_prefix', 'title', 'description', 'num_elements', 'reference', 'tags']
+            writer.writerow(headers)
+            writer.writerow([data[h] for h in headers])
 
     def refresh(self):
         dataset_data = self._get_json("datasets/{}".format(self.get_url_prefix()))
