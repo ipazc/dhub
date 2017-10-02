@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from concurrent.futures import ThreadPoolExecutor
 import csv
+from datetime import datetime
 import json
 import os
+from pyzip import PyZip
+from mldata.config import now, CACHE_TIME, segments
 from mldata.element import Element
 from mldata.wrapper.api_wrapper import APIWrapper
 from mldata.interpreters.interpreter import Interpreter
@@ -10,8 +14,11 @@ from mldata.interpreters.interpreter import Interpreter
 __author__ = 'Iván de Paz Centeno'
 
 
+pool_keys = ThreadPoolExecutor(4)
+pool_content = ThreadPoolExecutor(4)
+
 class Dataset(APIWrapper):
-    def __init__(self, url_prefix, title, description, reference, tags, token=None, binary_interpreter=None, token_info=None):
+    def __init__(self, url_prefix, title, description, reference, tags, token=None, binary_interpreter=None, token_info=None, server_info=None):
         self.data = {}
 
         self.binary_interpreter = binary_interpreter
@@ -30,8 +37,13 @@ class Dataset(APIWrapper):
         self.data['reference'] = reference
         self.elements_count = 0
         self.comments_count = 0
+        self.page_cache = {}
+        self.last_cache_time = now()
 
-        super().__init__(token, token_info=token_info)
+        super().__init__(token, token_info=token_info, server_info=server_info)
+
+    def __repr__(self):
+        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}".format(self.get_title(), len(self), self.get_tags(), self.get_description(), self.get_reference())
 
     def set_binary_interpreter(self, binary_interpreter):
         self.binary_interpreter = binary_interpreter
@@ -68,10 +80,10 @@ class Dataset(APIWrapper):
                          json_data={k:v for k,v in self.data.items() if k != "url_prefix"})
 
     @classmethod
-    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None):
+    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None):
 
         dataset = cls(definition['url_prefix'], definition['title'], definition['description'], definition['reference'],
-                      definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info)
+                      definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info, server_info=server_info)
 
         dataset.comments_count = definition['comments_count']
         dataset.elements_count = definition['elements_count']
@@ -105,57 +117,133 @@ class Dataset(APIWrapper):
         element.set_content(content, interpret)
         return element
 
-    def __getitem__(self, key) -> Element:
-        try:
-            result = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
-            raise_exception = False
-        except Exception as ex:
-            result = None
-            raise_exception = True
+    def _request_segment(self, ids):
+        results = self._get_json("datasets/{}/elements/bundle".format(self.get_url_prefix()), json_data={'elements': ids})
 
-        if raise_exception:
-            raise KeyError(key)
+        # Warning: what if 'result' does not have the elements ordered in the same way as 'ids'?
+        # Todo: reorder 'elements' to match the order of 'ids'
+        elements = [
+                Element.from_dict(result, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info)
+                for result in results
+        ]
 
-        return Element.from_dict(result, self, self.token, self.binary_interpreter, token_info=self.token_info)
+        future = pool_content.submit(self._retrieve_segment_contents, ids)
+
+        for element in elements:
+            element.content_promise = future
+
+        return elements
+
+    def _retrieve_segment_contents(self, ids):
+        packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()), json_data={'elements': ids})
+        packet = PyZip.from_bytes(packet_bytes)
+
+        return dict(packet)
+
+    def __getitem__(self, key):
+        if type(key) is not slice and len(str(key)) < 8:
+            key = int(key)
+            key = slice(key, key+1, 1)
+
+        elements = []
+
+        if type(key) is slice:
+            step = key.step
+            start = key.start
+            stop = key.stop
+            if key.step is None: step = 1
+            if key.stop is None: stop = len(self)
+            if key.stop < 0: stop = len(self) - stop
+
+            ps = self.server_info['Page-Size']
+
+            ids = [self._get_key(i) for i in range(start, stop, step)]
+
+            futures = [pool_keys.submit(self._request_segment, ids) for segment in segments(ids, ps)]
+
+            elements = []
+
+            for future in futures:
+                elements += future.result()
+
+        elif type(key) is str:
+            try:
+                response = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
+                element = Element.from_dict(response, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info)
+                element.content_promise = pool_content.submit(element._retrieve_content)
+                elements = [element]
+
+            except Exception as ex:
+                elements = []
+
+        else:
+            raise KeyError("Type of key not allowed.")
+
+        if len(elements) > 1:
+            result = elements
+        elif len(elements) == 1:
+            result = elements[0]
+        else:
+            raise KeyError("{} not found".format(key))
+
+        return result
 
     def __delitem__(self, key):
         result = self._delete_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
         self.refresh()
+
+    def _get_elements(self, page):
+        return [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info) for element in self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
 
     def __iter__(self):
         """
         :rtype: Element
         :return:
         """
-        page = 0
+        ps = self.server_info['Page-Size']
+        number_of_pages = len(self) // ps + int(len(self) % ps > 0)
 
-        # Two buffers to go through the elements. The second buffer will be filled whenever the first buffer is
-        # half run.
-        first = self._get_json("datasets/{}/elements".format(self.get_url_prefix()))
-        second = []
-        new_list_requested = False
+        buffer = None
 
-        iteration = -1
-        while len(first) > 0:
-            iteration += 1
+        for page in range(number_of_pages):
 
-            if iteration > len(first)//2 and not new_list_requested:
-                page += 1
-                second = self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})
-                new_list_requested = True
+            if buffer is None:
+                buffer = pool_keys.submit(self._get_elements, page)
 
-            if iteration >= len(first):
-                first = second
-                second = []
-                iteration = 0
-                new_list_requested = False
+            buffer2 = pool_keys.submit(self._get_elements, page+1)
 
-            if len(first) > iteration:
-                yield Element.from_dict(first[iteration], self, self.token, self.binary_interpreter, token_info=self.token_info)
+            elements = buffer.result()
+
+            future = pool_content.submit(self._retrieve_segment_contents, [element.get_id() for element in elements])
+
+            for element in elements:
+                element.content_promise = future
+                yield element
+
+            buffer = buffer2
+
+    def _get_key(self, key_index):
+        ps = int(self.server_info['Page-Size'])
+        key_page = key_index // ps
+        index = key_index % ps
+
+        try:
+            if (now() - self.last_cache_time).total_seconds() > CACHE_TIME:
+                self.page_cache.clear()
+
+            page = self.page_cache[key_page]
+
+        except KeyError as ex:
+            # Cache miss
+            page = self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': key_page})
+            self.page_cache[key_page] = page
+            self.last_cache_time = now()
+
+        return page[index]['_id']
 
     def keys(self, page=-1):
         if page == -1:
-            data = [element.get_id() for element in self]
+            data = [self._get_key(i) for i in range(len(self))]
         else:
             data = [element['_id'] for element in self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
 

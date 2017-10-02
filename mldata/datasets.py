@@ -78,7 +78,7 @@ class Datasets(APIWrapper):
         return list(self.datasets.values())
 
     def refresh(self):
-        self.datasets = {d['url_prefix']: Dataset.from_dict(d, self.token, token_info=self.token_info) for d in self._get_json("datasets")}
+        self.datasets = {d['url_prefix']: Dataset.from_dict(d, self.token, token_info=self.token_info, server_info=self.server_info) for d in self._get_json("datasets")}
 
     def __str__(self):
         return str(self.keys())

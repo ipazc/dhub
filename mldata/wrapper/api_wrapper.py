@@ -8,26 +8,29 @@ __author__ = 'Iván de Paz Centeno'
 
 class APIWrapper(object):
 
-    def __init__(self, token, api_url=None, token_info=None):
+    def __init__(self, token, api_url=None, token_info=None, server_info=None):
         if api_url is None:
-            api_url = "http://localhost:5000"
+            api_url = "http://localhost:5555"
 
         self.api_url = api_url
         self.token = token
 
         if token_info is None:
-            self._update_token_info()
+            self._update_token_info() # server_info is also updated here
         else:
             self.token_info = token_info
+            self.server_info = server_info
 
     def _update_token_info(self):
         try:
+            sv_info = requests.get("{}/server".format(self.api_url), params={'_tok': self.token}).json()
             token_info = requests.get("{}/tokens/{}".format(self.api_url, self.token), params={'_tok': self.token}).json()
         except Exception as ex:
             print(ex)
             raise Exception("Backend could not be contacted!")
 
         self.token_info = token_info
+        self.server_info = sv_info
 
     def _get_json(self, rel_url, extra_data=None, json_data=None):
         if extra_data is None:
