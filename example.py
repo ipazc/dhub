@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from io import BytesIO
 import os
+from time import sleep
 from zipfile import ZipFile, ZIP_DEFLATED
 from mldata.datasets import Datasets
 from mldata.interpreters.bin_image import BinImage
@@ -14,25 +15,16 @@ token = "1b57b8a85bdc403b8d20eefd91a9f8e1"
 def remove_elements(dataset):
     for id in dataset.keys(): del dataset[id]
 
-
 datasets = Datasets(token)
 dataset = datasets[0]
 
-dataset[104].set_content(b"jeje hola")
-#print(dataset)
-"""
-print(dataset[0].get_title())
-print(dataset[1].get_title())
-print(dataset[2].get_title())
-print(dataset[3].get_title())
-print(dataset[4].get_title())
-print(dataset[5].get_title(), dataset[5].get_id(), dataset[5].get_content())
-"""
-iteration = -1
-for element in dataset:
-    iteration += 1
-    print("{}: {} {} ({})".format(iteration, element.get_title(), element.get_id(), element.get_content()))
-    if iteration == 105: break
+#dataset[0].set_ref("ref1")
+#dataset[1].set_ref("ref2")
+dataset[2].set_content(b"holba2")
+sleep(5)
+dataset[2].set_ref("jebd")
+print(dataset[2])
+dataset.close()
 
 """iteration = -1
 for element in dataset:

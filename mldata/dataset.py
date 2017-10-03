@@ -10,15 +10,18 @@ from mldata.config import now, CACHE_TIME, segments
 from mldata.element import Element
 from mldata.wrapper.api_wrapper import APIWrapper
 from mldata.interpreters.interpreter import Interpreter
+from mldata.wrapper.smart_updater import AsyncSmartUpdater
 
 __author__ = 'Iván de Paz Centeno'
-
 
 pool_keys = ThreadPoolExecutor(4)
 pool_content = ThreadPoolExecutor(4)
 
+
 class Dataset(APIWrapper):
-    def __init__(self, url_prefix, title, description, reference, tags, token=None, binary_interpreter=None, token_info=None, server_info=None):
+    def __init__(self, url_prefix: str, title: str, description: str, reference: str, tags: list, token: str=None,
+                 binary_interpreter: Interpreter=None, token_info: dict=None, server_info: dict=None,
+                 use_smart_updater: AsyncSmartUpdater=True):
         self.data = {}
 
         self.binary_interpreter = binary_interpreter
@@ -39,11 +42,19 @@ class Dataset(APIWrapper):
         self.comments_count = 0
         self.page_cache = {}
         self.last_cache_time = now()
-
         super().__init__(token, token_info=token_info, server_info=server_info)
 
+        # Server_info is only available after super() init.
+        if use_smart_updater:
+            self.smart_updater = AsyncSmartUpdater(self.server_info, self)
+        else:
+            self.smart_updater = None
+
     def __repr__(self):
-        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}".format(self.get_title(), len(self), self.get_tags(), self.get_description(), self.get_reference())
+        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}".format(self.get_title(), len(self),
+                                                                                           self.get_tags(),
+                                                                                           self.get_description(),
+                                                                                           self.get_reference())
 
     def set_binary_interpreter(self, binary_interpreter):
         self.binary_interpreter = binary_interpreter
@@ -77,19 +88,20 @@ class Dataset(APIWrapper):
 
     def update(self):
         self._patch_json("/datasets/{}".format(self.get_url_prefix()),
-                         json_data={k:v for k,v in self.data.items() if k != "url_prefix"})
+                         json_data={k: v for k, v in self.data.items() if k != "url_prefix"})
 
     @classmethod
     def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None):
 
         dataset = cls(definition['url_prefix'], definition['title'], definition['description'], definition['reference'],
-                      definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info, server_info=server_info)
+                      definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info,
+                      server_info=server_info)
 
         dataset.comments_count = definition['comments_count']
         dataset.elements_count = definition['elements_count']
         return dataset
 
-    def add_element(self, title:str, description:str, tags:list, http_ref:str, content, interpret=True) -> Element:
+    def add_element(self, title: str, description: str, tags: list, http_ref: str, content, interpret=True) -> Element:
 
         if type(content) is str:
             # content is a URI
@@ -118,14 +130,16 @@ class Dataset(APIWrapper):
         return element
 
     def _request_segment(self, ids):
-        results = self._get_json("datasets/{}/elements/bundle".format(self.get_url_prefix()), json_data={'elements': ids})
+        results = self._get_json("datasets/{}/elements/bundle".format(self.get_url_prefix()),
+                                 json_data={'elements': ids})
 
         # Warning: what if 'result' does not have the elements ordered in the same way as 'ids'?
         # Todo: reorder 'elements' to match the order of 'ids'
         elements = [
-                Element.from_dict(result, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info)
-                for result in results
-        ]
+            Element.from_dict(result, self, self.token, self.binary_interpreter, token_info=self.token_info,
+                              server_info=self.server_info, smart_updater=self.smart_updater)
+            for result in results
+            ]
 
         future = pool_content.submit(self._retrieve_segment_contents, ids)
 
@@ -135,7 +149,8 @@ class Dataset(APIWrapper):
         return elements
 
     def _retrieve_segment_contents(self, ids):
-        packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()), json_data={'elements': ids})
+        packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()),
+                                        json_data={'elements': ids})
         packet = PyZip.from_bytes(packet_bytes)
 
         return dict(packet)
@@ -143,7 +158,7 @@ class Dataset(APIWrapper):
     def __getitem__(self, key):
         if type(key) is not slice and len(str(key)) < 8:
             key = int(key)
-            key = slice(key, key+1, 1)
+            key = slice(key, key + 1, 1)
 
         elements = []
 
@@ -169,7 +184,9 @@ class Dataset(APIWrapper):
         elif type(key) is str:
             try:
                 response = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
-                element = Element.from_dict(response, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info)
+                element = Element.from_dict(response, self, self.token, self.binary_interpreter,
+                                            token_info=self.token_info, server_info=self.server_info,
+                                            smart_updater=self.smart_updater)
                 element.content_promise = pool_content.submit(element._retrieve_content)
                 elements = [element]
 
@@ -193,7 +210,9 @@ class Dataset(APIWrapper):
         self.refresh()
 
     def _get_elements(self, page):
-        return [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info, server_info=self.server_info) for element in self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
+        return [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info,
+                                  server_info=self.server_info, smart_updater=self.smart_updater) for element in
+                self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
 
     def __iter__(self):
         """
@@ -210,7 +229,7 @@ class Dataset(APIWrapper):
             if buffer is None:
                 buffer = pool_keys.submit(self._get_elements, page)
 
-            buffer2 = pool_keys.submit(self._get_elements, page+1)
+            buffer2 = pool_keys.submit(self._get_elements, page + 1)
 
             elements = buffer.result()
 
@@ -245,7 +264,8 @@ class Dataset(APIWrapper):
         if page == -1:
             data = [self._get_key(i) for i in range(len(self))]
         else:
-            data = [element['_id'] for element in self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
+            data = [element['_id'] for element in
+                    self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
 
         return data
 
@@ -257,7 +277,8 @@ class Dataset(APIWrapper):
         data['num_elements'] = len(self)
         return str(data)
 
-    def save_to_folder(self, folder, metadata_format="json", elements_extension=None, use_numbered_ids=False, only_metadata=False):
+    def save_to_folder(self, folder, metadata_format="json", elements_extension=None, use_numbered_ids=False,
+                       only_metadata=False):
         try:
             os.mkdir(folder)
         except Exception as ex:
@@ -321,7 +342,7 @@ class Dataset(APIWrapper):
             with open(os.path.join(content_folder, filename), "wb") as f:
                 f.write(binary_content)
 
-            print("\rProgress: {}%".format(round(it/(count+0.0001)*100, 2)), end="", flush=True)
+            print("\rProgress: {}%".format(round(it / (count + 0.0001) * 100, 2)), end="", flush=True)
 
         print("\rProgress: 100%", end="", flush=True)
         print("\nFinished")
@@ -359,4 +380,8 @@ class Dataset(APIWrapper):
         dataset_data = self._get_json("datasets/{}".format(self.get_url_prefix()))
         self.elements_count = dataset_data['elements_count']
         self.comments_count = dataset_data['comments_count']
-        self.data = {k:dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags']}
+        self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags']}
+
+    def close(self):
+        if self.smart_updater is not None:
+            self.smart_updater.stop()
