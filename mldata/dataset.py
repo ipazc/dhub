@@ -2,7 +2,6 @@
 # -*- coding: utf-8 -*-
 from concurrent.futures import ThreadPoolExecutor
 import csv
-from datetime import datetime
 import json
 import os
 from pyzip import PyZip
@@ -127,7 +126,47 @@ class Dataset(APIWrapper):
 
         element = self[result]
         element.set_content(content, interpret)
-        return element
+        return element0
+
+    def add_elements(self, add_element_kwargs_list: list) -> list:
+        # we need to preprocess the argument
+        post_kwargs = []
+        content_list = []
+        for element_kwargs in add_element_kwargs_list:
+            content = element_kwargs['content']
+
+            if type(content) is str:
+                # content is a URI
+                if not os.path.exists(content):
+                    raise Exception("content must be a binary data or a URI to a file.")
+
+                with open(content, "rb") as f:
+                    content_bytes = f.read()
+
+                if self.binary_interpreter is None:
+                    content = content_bytes
+                else:
+                    content = self.binary_interpreter.cipher(content_bytes)
+
+            content_list.append(content)
+
+            post_kwargs.append({'title': element_kwargs['title'],
+                                'description': element_kwargs['description'],
+                                'tags': element_kwargs['tags'],
+                                'http_ref': element_kwargs['http_ref']})
+
+        result = self._post_json("datasets/{}/elements/bundle".format(self.get_url_prefix()), json_data={
+            'elements': post_kwargs
+        })
+
+        self.refresh()
+        elements = [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info,
+                                  server_info=self.server_info, smart_updater=self.smart_updater) for element in result]
+
+        for element, content in zip(elements, content_list):
+            element.set_content(content)
+
+        return elements
 
     def _request_segment(self, ids):
         results = self._get_json("datasets/{}/elements/bundle".format(self.get_url_prefix()),
@@ -141,14 +180,14 @@ class Dataset(APIWrapper):
             for result in results
             ]
 
-        future = pool_content.submit(self._retrieve_segment_contents, ids)
+        future = pool_content.submit(self.__retrieve_segment_contents, ids)
 
         for element in elements:
             element.content_promise = future
 
         return elements
 
-    def _retrieve_segment_contents(self, ids):
+    def __retrieve_segment_contents(self, ids):
         packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()),
                                         json_data={'elements': ids})
         packet = PyZip.from_bytes(packet_bytes)
@@ -206,17 +245,44 @@ class Dataset(APIWrapper):
         return result
 
     def __delitem__(self, key):
-        result = self._delete_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
-        self.refresh()
+        if type(key) is not slice and len(str(key)) < 8:
+            key = int(key)
+            key = slice(key, key + 1, 1)
 
-    def _get_elements(self, page):
+        ids = []
+
+        if type(key) is slice:
+            step = key.step
+            start = key.start
+            stop = key.stop
+            if key.step is None: step = 1
+            if key.stop is None: stop = len(self)
+            if key.stop < 0: stop = len(self) - stop
+
+            ps = self.server_info['Page-Size']
+
+            ids = [self._get_key(i) for i in range(start, stop, step)]
+
+        elif type(key) is str:
+                ids = [key]
+
+        if len(ids) > 1:
+            result = self._delete_json("datasets/{}/elements/bundle".format(self.get_url_prefix()), json_data={'elements': ids})
+        elif len(ids) == 1:
+            result = self._delete_json("datasets/{}/elements/{}".format(self.get_url_prefix(), ids[0]))
+        else:
+            raise KeyError("{} not found".format(key))
+
+        self.refresh()
+        return result
+
+    def _get_elements(self, page, filter_options=None):
         return [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info,
                                   server_info=self.server_info, smart_updater=self.smart_updater) for element in
-                self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page})]
+                self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page}, json_data={'options': filter_options})]
 
-    def __iter__(self):
+    def filter_iter(self, options):
         """
-        :rtype: Element
         :return:
         """
         ps = self.server_info['Page-Size']
@@ -227,19 +293,23 @@ class Dataset(APIWrapper):
         for page in range(number_of_pages):
 
             if buffer is None:
-                buffer = pool_keys.submit(self._get_elements, page)
+                buffer = pool_keys.submit(self._get_elements, page, options)
 
-            buffer2 = pool_keys.submit(self._get_elements, page + 1)
+            buffer2 = pool_keys.submit(self._get_elements, page + 1, options)
 
             elements = buffer.result()
 
-            future = pool_content.submit(self._retrieve_segment_contents, [element.get_id() for element in elements])
+            future = pool_content.submit(self.__retrieve_segment_contents, [element.get_id() for element in elements])
 
             for element in elements:
                 element.content_promise = future
                 yield element
 
             buffer = buffer2
+
+    def __iter__(self) -> Element:
+        for element in self.filter_iter(None):
+            yield element
 
     def _get_key(self, key_index):
         ps = int(self.server_info['Page-Size'])
@@ -382,6 +452,10 @@ class Dataset(APIWrapper):
         self.comments_count = dataset_data['comments_count']
         self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags']}
 
-    def close(self):
+    def clear(self):
+        self._delete_json('datasets/{}/elements/bundle'.format(self.get_url_prefix()), json_data={'elements':self.keys()})
+        self.refresh()
+
+    def close(self, force=False):
         if self.smart_updater is not None:
-            self.smart_updater.stop()
+            self.smart_updater.stop(cancel_pending_jobs=force)
