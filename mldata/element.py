@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from mldata.config import now, CACHE_TIME
 
 from mldata.wrapper.api_wrapper import APIWrapper
+from mldata.wrapper.smart_updater import AsyncSmartUpdater
 
 __author__ = 'Iván de Paz Centeno'
 
@@ -14,7 +15,7 @@ upload_pool = ThreadPoolExecutor(4)
 class Element(APIWrapper):
 
     def __init__(self, title, description, tags, http_ref, id=None, dataset_owner=None, token=None,
-                 binary_interpreter=None, token_info=None, server_info=None):
+                 binary_interpreter=None, token_info=None, server_info=None, smart_updater:AsyncSmartUpdater=None):
         super().__init__(token, token_info=token_info, server_info=server_info)
         self.data = {'title': title, 'description': description, 'tags': tags, 'http_ref': http_ref}
         self.has_content = False
@@ -25,6 +26,7 @@ class Element(APIWrapper):
         self.cached_content = None
         self.cached_content_time = now()
         self.content_promise = None
+        self.smart_updater = smart_updater
 
     def _retrieve_content(self):
         content = self._get_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id))
@@ -50,15 +52,19 @@ class Element(APIWrapper):
 
     def set_title(self, new_title):
         self.data['title'] = new_title
+        self.update()
 
     def set_description(self, new_description):
         self.data['description'] = new_description
+        self.update()
 
     def set_tags(self, new_tags):
         self.data['tags'] = new_tags
+        self.update()
 
     def set_ref(self, new_http_ref):
         self.data['http_ref'] = new_http_ref
+        self.update()
 
     def get_content(self, interpret=True):
         if not self.has_content:
@@ -89,28 +95,37 @@ class Element(APIWrapper):
         if content == self.cached_content:
             return False
 
-        promise = upload_pool.submit(self._upload_content, content)
+        if self.smart_updater is not None:
+            self.smart_updater.queue_content_update("datasets/{}/elements/content".format(self.dataset_owner.get_url_prefix()), self.get_id(), content)
+        else:
+            upload_pool.submit(self._upload_content, content)
 
         self.cached_content = content
         self.has_content = True
         self.cached_content_time = now()
 
-        return promise
+        return True
 
     def update(self):
-        self._patch_json("datasets/{}/elements/{}".format(self.dataset_owner.get_url_prefix(), self._id),
-                         json_data=self.data)
-        self.refresh()
+        if self.smart_updater is not None:
+            self.smart_updater.queue_update("datasets/{}/elements/bundle".format(self.dataset_owner.get_url_prefix()), self.get_id(), self.data)
+
+        else:
+            self._patch_json("datasets/{}/elements/{}".format(self.dataset_owner.get_url_prefix(), self._id),
+                             json_data=self.data)
+            self.refresh()
 
     def __str__(self):
         return "{} {}".format(self._id, str(self.data))
 
     @classmethod
-    def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None, token_info=None, server_info=None):
+    def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None, token_info=None, server_info=None,
+                  smart_updater=None):
 
         element = cls(definition['title'], definition['description'], definition['tags'],
                       definition['http_ref'], id=definition['_id'], token=token,
-                      binary_interpreter=binary_interpreter, dataset_owner=dataset_owner, token_info=token_info, server_info=server_info)
+                      binary_interpreter=binary_interpreter, dataset_owner=dataset_owner, token_info=token_info, server_info=server_info,
+                      smart_updater=smart_updater)
 
         element.comments_count = definition['comments_count']
         element.has_content = definition['has_content']
