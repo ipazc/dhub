@@ -22,16 +22,19 @@ element_kwargs = [
 dataset = datasets[0]
 #elements = dataset.add_elements(element_kwargs)
 
-for element in dataset.filter_iter({'tags':{'$regex':'age[:][ ]?5'}}):
+"""for element in dataset.filter_iter({'tags':{'$regex':'age[:][ ]?5'}}):
     print(element)
 print(dataset)
 sleep(2)
+"""
 
-print(dataset[0])
-print(dataset[1])
-
+element = dataset[0]
+print(element.get_content())
+#element.set_title("titlte33")
+element.set_content(b"hi234")
+print(element.get_content())
 print(dataset[0].get_content())
-print(dataset[1].get_content())
+
 
 #dataset.close()
 #element = dataset.add_element("title1", "desc1", ["hi", "ho"], "none", b"hola")
