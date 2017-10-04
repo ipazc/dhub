@@ -1,0 +1,7 @@
+{
+    "backend": "http://localhost:5555",
+    "token_lookup": {
+        "default": "REPLACE_ME_WITH_DEFAULT_TOKEN",
+        "me": "REPLACE_ME_WITH_SPECIAL_TOKEN"
+    }
+}

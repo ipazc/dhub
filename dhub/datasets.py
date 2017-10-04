@@ -1,8 +1,28 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-from mldata.dataset import Dataset
-from mldata.mldatarc import mldatarc
-from mldata.wrapper.api_wrapper import APIWrapper
+#
+# dhub
+# Copyright (C) 2017 Iván de Paz Centeno <ipazc@unileon.es>.
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; version 3
+# of the License or (at your option) any later version of
+# the License.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
+# MA  02110-1301, USA.
+
+from dhub.dataset import Dataset
+from dhub.dhubrc import dhubrc
+from dhub.wrapper.api_wrapper import APIWrapper
 
 __author__ = 'Iván de Paz Centeno'
 
@@ -10,7 +30,7 @@ class Datasets(APIWrapper):
     def __init__(self, token_id=None):
 
         try:
-            token = mldatarc.lookup_token(token_id)
+            token = dhubrc.lookup_token(token_id)
         except KeyError as ex:
             token = token_id
 
