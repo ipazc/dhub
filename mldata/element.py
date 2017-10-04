@@ -29,6 +29,10 @@ class Element(APIWrapper):
         self.smart_updater = smart_updater
 
     def _retrieve_content(self):
+
+        if self.smart_updater is not None and self.smart_updater.is_content_update_queued([self.get_id()]):
+            self.smart_updater.wait_for_elements_content_update([self.get_id()])
+
         content = self._get_binary("datasets/{}/elements/{}/content".format(self.dataset_owner.get_url_prefix(), self._id))
         return {self._id: content}
 

@@ -46,8 +46,14 @@ class Dataset(APIWrapper):
         # Server_info is only available after super() init.
         if use_smart_updater:
             self.smart_updater = AsyncSmartUpdater(self.server_info, self)
+            """
+            :type : AsyncSmartUpdater
+            """
         else:
             self.smart_updater = None
+            """
+            :type : AsyncSmartUpdater
+            """
 
     def __repr__(self):
         return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}".format(self.get_title(), len(self),
@@ -188,11 +194,21 @@ class Dataset(APIWrapper):
         return elements
 
     def __retrieve_segment_contents(self, ids):
+
+        if self.smart_updater is not None and self.smart_updater.is_content_update_queued(ids):
+            self.smart_updater.wait_for_elements_content_update(ids)
+
         packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()),
                                         json_data={'elements': ids})
         packet = PyZip.from_bytes(packet_bytes)
 
         return dict(packet)
+
+    def __wait_for_elements_ready(self, ids):
+        if self.smart_updater is not None:
+            if self.smart_updater.is_element_update_queued(ids):
+                self.smart_updater.wait_for_elements_update(ids)
+
 
     def __getitem__(self, key):
         if type(key) is not slice and len(str(key)) < 8:
@@ -213,6 +229,8 @@ class Dataset(APIWrapper):
 
             ids = [self._get_key(i) for i in range(start, stop, step)]
 
+            self.__wait_for_elements_ready(ids)
+
             futures = [pool_keys.submit(self._request_segment, ids) for segment in segments(ids, ps)]
 
             elements = []
@@ -222,6 +240,7 @@ class Dataset(APIWrapper):
 
         elif type(key) is str:
             try:
+                self.__wait_for_elements_ready([key])
                 response = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
                 element = Element.from_dict(response, self, self.token, self.binary_interpreter,
                                             token_info=self.token_info, server_info=self.server_info,
