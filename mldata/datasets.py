@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 from mldata.dataset import Dataset
-
+from mldata.mldatarc import mldatarc
 from mldata.wrapper.api_wrapper import APIWrapper
 
 __author__ = 'Iván de Paz Centeno'
 
 class Datasets(APIWrapper):
-    def __init__(self, token):
+    def __init__(self, token_id=None):
+
+        try:
+            token = mldatarc.lookup_token(token_id)
+        except KeyError as ex:
+            token = token_id
+
         super().__init__(token)
         self.refresh()
 

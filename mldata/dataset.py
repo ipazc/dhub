@@ -56,13 +56,22 @@ class Dataset(APIWrapper):
             """
 
     def __repr__(self):
-        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}".format(self.get_title(), len(self),
+
+        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}; fork_father: {}, fork_count: {}".format(self.get_title(), len(self),
                                                                                            self.get_tags(),
                                                                                            self.get_description(),
-                                                                                           self.get_reference())
+                                                                                           self.get_reference(),
+                                                                                           self.get_fork_father(),
+                                                                                           self.get_fork_count())
 
     def set_binary_interpreter(self, binary_interpreter):
         self.binary_interpreter = binary_interpreter
+
+    def get_fork_father(self):
+        return self.data['fork_father']
+
+    def get_fork_count(self):
+        return self.data['fork_count']
 
     def get_url_prefix(self):
         return self.data['url_prefix']
@@ -101,7 +110,8 @@ class Dataset(APIWrapper):
         dataset = cls(definition['url_prefix'], definition['title'], definition['description'], definition['reference'],
                       definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info,
                       server_info=server_info)
-
+        dataset.data['fork_count'] = definition['fork_count']
+        dataset.data['fork_father'] = definition['fork_father']
         dataset.comments_count = definition['comments_count']
         dataset.elements_count = definition['elements_count']
         return dataset
@@ -132,7 +142,7 @@ class Dataset(APIWrapper):
 
         element = self[result]
         element.set_content(content, interpret)
-        return element0
+        return element
 
     def add_elements(self, add_element_kwargs_list: list) -> list:
         # we need to preprocess the argument
@@ -300,6 +310,21 @@ class Dataset(APIWrapper):
                                   server_info=self.server_info, smart_updater=self.smart_updater) for element in
                 self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page}, json_data={'options': filter_options})]
 
+    def fork(self, new_prefix:str, title:str, description:str, tags:list, reference:str, destination, options:dict=None):
+        arguments = {
+                        'title': title,
+                        'description': description,
+                        'tags': tags,
+                        'url_prefix': new_prefix,
+                        'reference': reference,
+                        'options': options
+                    }
+        result = self._post_json("datasets/{}/fork/{}".format(self.get_url_prefix(), destination.token),
+                        json_data=arguments)
+
+        destination.refresh()
+        return destination[result['url_prefix']]
+
     def filter_iter(self, options):
         """
         :return:
@@ -364,7 +389,27 @@ class Dataset(APIWrapper):
     def __str__(self):
         data = dict(self.data)
         data['num_elements'] = len(self)
-        return str(data)
+        url_prefix = data['url_prefix']
+        del data['url_prefix']
+        order_keys = ['title', 'num_elements', 'reference', 'tags', 'fork_father', 'fork_count', 'description']
+
+        result = "[{}]".format(url_prefix)
+        result += " {}"
+        content ="{"
+        first = True
+        for key in order_keys:
+            if first:
+                first = False
+            else:
+                content += ", "
+
+            if key == 'tags':
+                content += "'{}': {}".format(key, data[key])
+            else:
+                content += "'{}': \'{}\'".format(key, data[key])
+        content += "}"
+
+        return result.format(content)
 
     def save_to_folder(self, folder, metadata_format="json", elements_extension=None, use_numbered_ids=False,
                        only_metadata=False):
