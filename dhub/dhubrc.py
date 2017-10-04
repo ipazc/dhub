@@ -26,7 +26,7 @@ from os.path import expanduser
 
 __author__ = 'Iván de Paz Centeno'
 
-class dhubRc(object):
+class DHubRc(object):
     def __init__(self):
         home = expanduser("~")
         self.token_lookup = {}
@@ -65,4 +65,4 @@ class dhubRc(object):
     def get_backend(self):
         return self.backend
 
-dhubrc = dhubRc()
+dhubrc = DHubRc()
