@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 from time import sleep
 import requests
+from mldata.mldatarc import mldatarc
 
 __author__ = 'Iván de Paz Centeno'
 
@@ -10,8 +11,9 @@ class APIWrapper(object):
 
     def __init__(self, token, api_url=None, token_info=None, server_info=None):
         if api_url is None:
-            api_url = "http://localhost:5555"
+             api_url = mldatarc.get_backend()
 
+        if api_url.endswith("/"): api_url = api_url[:-1]
         self.api_url = api_url
         self.token = token
 
@@ -39,6 +41,9 @@ class APIWrapper(object):
         if json_data is None:
             json_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
 
@@ -49,7 +54,7 @@ class APIWrapper(object):
             response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
 
         if response.status_code not in [200, 201]:
-            raise Exception("Error while retrieving data.")
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
 
         return response.json()
 
@@ -60,6 +65,9 @@ class APIWrapper(object):
         if json_data is None:
             json_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
@@ -67,6 +75,9 @@ class APIWrapper(object):
         while response.status_code == 429:
             sleep(2)
             response = requests.get("{}/{}".format(self.api_url, rel_url), json=json_data, params=data)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
 
         return response.content
 
@@ -77,12 +88,18 @@ class APIWrapper(object):
         if extra_data is None:
             extra_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.put("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
         while response.status_code == 429:
             sleep(2)
             response = requests.put("{}/{}".format(self.api_url, rel_url), params=data, data=binary)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
 
         return response.json()
 
@@ -93,12 +110,18 @@ class APIWrapper(object):
         if json_data is None:
             json_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.post("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
         while response.status_code == 429:
             sleep(2)
             response = requests.post("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
 
         return response.json()
 
@@ -109,12 +132,19 @@ class APIWrapper(object):
         if json_data is None:
             json_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.patch("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
         while response.status_code == 429:
             sleep(2)
             response = requests.patch("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
+
         return response.json()
 
     def _delete_json(self, rel_url, extra_data=None, json_data=None):
@@ -124,10 +154,17 @@ class APIWrapper(object):
         if json_data is None:
             json_data = {}
 
+        if rel_url.startswith("/"):
+            rel_url = rel_url[1:]
+
         data = dict(extra_data)
         data['_tok'] = self.token
         response = requests.delete("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
         while response.status_code == 429:
             sleep(2)
             response = requests.delete("{}/{}".format(self.api_url, rel_url), params=data, json=json_data)
+
+        if response.status_code not in [200, 201]:
+            raise Exception("Failed to communicate with backend: {}".format(response.content.decode()))
+
         return response.json()
