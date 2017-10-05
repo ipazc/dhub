@@ -160,7 +160,6 @@ class Dataset(APIWrapper):
         })
 
         self.refresh()
-
         element = self[result]
         element.set_content(content, interpret)
         return element

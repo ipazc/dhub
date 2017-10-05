@@ -128,6 +128,9 @@ class Element(APIWrapper):
         self.has_content = True
         self.cached_content_time = now()
 
+        if self.content_promise:
+            self.content_promise = None
+
         return True
 
     def update(self):
