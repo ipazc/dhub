@@ -193,7 +193,7 @@ class AsyncSmartUpdater(object):
                     gathered_elements.append(queue.get())
 
                     # This is the smart action: we combine several requests into one
-                    if len(gathered_elements) > ps:
+                    if len(gathered_elements) >= ps:
                         futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
                         gathered_elements = []
 
@@ -201,6 +201,9 @@ class AsyncSmartUpdater(object):
                     futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
 
                 concurrent.futures.wait(futures)
+
+    def queues_busy(self):
+        return self.content_put_queue.qsize() > 0 or self.element_update_queue.qsize() > 0
 
     def __do_update(self, request_kind, elements):
         if len(elements) > 0:

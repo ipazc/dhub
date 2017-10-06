@@ -25,6 +25,7 @@ from concurrent.futures import ThreadPoolExecutor
 import csv
 import json
 import os
+from time import sleep
 from pyzip import PyZip
 from dhub.config import now, CACHE_TIME, segments
 from dhub.element import Element
@@ -537,9 +538,18 @@ class Dataset(APIWrapper):
         self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags']}
 
     def clear(self):
-        self._delete_json('datasets/{}/elements/bundle'.format(self.get_url_prefix()), json_data={'elements':self.keys()})
+        ps = self.server_info['Page-Size']
+
+        for segment in segments(self.keys(), ps):
+            self._delete_json('datasets/{}/elements/bundle'.format(self.get_url_prefix()), json_data={'elements': segment})
+
         self.refresh()
 
     def close(self, force=False):
         if self.smart_updater is not None:
             self.smart_updater.stop(cancel_pending_jobs=force)
+
+    def sync(self):
+        if self.smart_updater is not None:
+            while self.smart_updater.queues_busy():
+                sleep(1)
