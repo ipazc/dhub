@@ -19,13 +19,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA  02110-1301, USA.
-
+from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 import requests
 from dhub.dhubrc import dhubrc
 
 __author__ = 'Iván de Paz Centeno'
 
+
+request_pool = ThreadPoolExecutor(2)
 
 class APIWrapper(object):
 
@@ -45,14 +47,14 @@ class APIWrapper(object):
 
     def _update_token_info(self):
         try:
-            sv_info = requests.get("{}/server".format(self.api_url), params={'_tok': self.token}).json()
-            token_info = requests.get("{}/tokens/{}".format(self.api_url, self.token), params={'_tok': self.token}).json()
+            sv_info = request_pool.submit(requests.get, "{}/server".format(self.api_url), params={'_tok': self.token})
+            token_info = request_pool.submit(requests.get, "{}/tokens/{}".format(self.api_url, self.token), params={'_tok': self.token})
         except Exception as ex:
             print(ex)
             raise Exception("Backend could not be contacted!")
 
-        self.token_info = token_info
-        self.server_info = sv_info
+        self.token_info = token_info.result().json()
+        self.server_info = sv_info.result().json()
 
     def _get_json(self, rel_url, extra_data=None, json_data=None):
         if extra_data is None:
