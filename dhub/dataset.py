@@ -26,6 +26,7 @@ import csv
 import json
 import os
 from time import sleep
+from pyfolder import PyFolder
 from pyzip import PyZip
 from dhub.config import now, CACHE_TIME, segments
 from dhub.element import Element
@@ -231,7 +232,7 @@ class Dataset(APIWrapper):
 
         packet_bytes = self._get_binary("datasets/{}/elements/content".format(self.get_url_prefix()),
                                         json_data={'elements': ids})
-        packet = PyZip.from_bytes(packet_bytes)
+        packet = PyZip().from_bytes(packet_bytes)
 
         return dict(packet)
 
@@ -457,11 +458,18 @@ class Dataset(APIWrapper):
         if metadata_format not in format_saver:
             raise Exception("format {} for metadata not supported.".format(metadata_format))
 
-        print("Collecting metadata...")
+        pyfolder = PyFolder(folder)
+
+        print("Collecting elements...")
         metadata = {}
         id = -1
+        count = len(self)
+        it = -1
 
-        for element in self:
+        for element in self.filter_iter(cache_content=not only_metadata):
+            it += 1
+
+            print("\rProgress: {}%".format(round(it / (count + 0.0001) * 100, 2)), end="", flush=True)
 
             if use_numbered_ids:
                 id += 1
@@ -481,46 +489,24 @@ class Dataset(APIWrapper):
                 'tags': element.get_tags(),
             }
 
-        format_saver[metadata_format](folder, metadata)
-        print("Saved metadata in format {}".format(metadata_format))
-
-        if only_metadata:
-            return
-
-        content_folder = os.path.join(folder, "content")
-        try:
-            os.mkdir(content_folder)
-        except FileExistsError as ex:
-            pass
-
-        print("Fetching elements...")
-
-        count = len(metadata)
-        it = -1
-        for filename, values in metadata.items():
-            it += 1
-            id = values['id']
-            binary_content = self[id].get_content(interpret=False)
-            with open(os.path.join(content_folder, filename), "wb") as f:
-                f.write(binary_content)
-
-            print("\rProgress: {}%".format(round(it / (count + 0.0001) * 100, 2)), end="", flush=True)
+            if not only_metadata:
+                pyfolder[os.path.join("content", element_id)] = element.get_content(interpret=False)
 
         print("\rProgress: 100%", end="", flush=True)
-        print("\nFinished")
 
-    def __save_json(self, folder, metadata):
-        with open(os.path.join(folder, "metadata.json"), "w") as f:
-            json.dump(metadata, f, indent=4)
+        format_saver[metadata_format](pyfolder, metadata)
+        print("\nSaved metadata in format {}".format(metadata_format))
+        print("Finished")
 
-        with open(os.path.join(folder, "dataset_info.json"), "w") as f:
-            data = dict(self.data)
-            data['num_elements'] = len(self)
-            data['tags'] = data['tags']
-            json.dump(data, f, indent=4)
+    def __save_json(self, pyfolder:PyFolder, metadata):
+        pyfolder["metadata.json"] = metadata
+        data = dict(self.data)
+        data['num_elements'] = len(self)
+        data['tags'] = data['tags']
+        pyfolder["dataset_info.json"] = data
 
-    def __save_csv(self, folder, metadata):
-        with open(os.path.join(folder, "metadata.csv"), 'w', newline="") as f:
+    def __save_csv(self, pyfolder:PyFolder, metadata):
+        with open(os.path.join(pyfolder.folder_root, "metadata.csv"), 'w', newline="") as f:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             headers = ['file_name', 'id', 'title', 'description', 'http_ref', 'tags']
             writer.writerow(headers)
@@ -529,7 +515,7 @@ class Dataset(APIWrapper):
                 v['tags'] = "'{}'".format(";".join(v['tags']))
                 writer.writerow([k] + [v[h] for h in headers if h != 'file_name'])
 
-        with open(os.path.join(folder, "dataset_info.csv"), "w", newline="") as f:
+        with open(os.path.join(pyfolder.folder_root, "dataset_info.csv"), "w", newline="") as f:
             writer = csv.writer(f, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
             data = dict(self.data)
             data['num_elements'] = len(self)
