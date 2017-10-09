@@ -19,7 +19,6 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston,
 # MA  02110-1301, USA.
-from time import time
 
 from dhub.dataset import Dataset
 from dhub.dhubrc import dhubrc
@@ -41,6 +40,12 @@ class Datasets(APIWrapper):
     def __len__(self):
         return len(self.datasets)
 
+    def find_closest(self, item):
+        for d in self.keys():
+            if item in d:
+                return d
+        return None
+
     def __getitem__(self, item) -> Dataset:
         result = None
         try:
@@ -50,6 +55,11 @@ class Datasets(APIWrapper):
             pass
 
         if result is None:
+            # Let's do smart things over here.
+            closest_name = self.find_closest(item)
+            if closest_name is not None:
+                item = closest_name
+
             result = self.datasets[item]
 
         return result
