@@ -56,15 +56,19 @@ class Datasets(APIWrapper):
 
         if result is None:
             # Let's do smart things over here.
-            closest_name = self.find_closest(item)
-            if closest_name is not None:
-                item = closest_name
+            if item not in self.keys():
+                closest_name = self.find_closest(item)
+                if closest_name is not None:
+                    item = closest_name
 
             result = self.datasets[item]
 
+            if type(result) is dict:
+                result = Dataset.from_dict(**result)
+
         return result
 
-    def add_dataset(self, url_prefix, title, description, reference, tags):
+    def add_dataset(self, url_prefix, title, description, reference, tags) -> Dataset:
         result = self._post_json("datasets", json_data={
             'title': title,
             'description': description,
@@ -74,7 +78,7 @@ class Datasets(APIWrapper):
         })
 
         self.refresh()
-        return self.datasets[result['url_prefix']]
+        return self[result['url_prefix']]
 
     def __setitem__(self, key, dataset):
         if dataset.api_url in self.keys():
@@ -115,7 +119,7 @@ class Datasets(APIWrapper):
         return list(self.datasets.values())
 
     def refresh(self):
-        self.datasets = {d['url_prefix']: Dataset.from_dict(d, self.token, token_info=self.token_info, server_info=self.server_info) for d in self._get_json("datasets")}
+        self.datasets = {d['url_prefix']: dict(definition=d, token=self.token, token_info=self.token_info, server_info=self.server_info) for d in self._get_json("datasets")}
 
     def __str__(self):
         return str(self.keys())

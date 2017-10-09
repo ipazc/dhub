@@ -22,6 +22,7 @@
 
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
+import os
 from queue import Queue, Empty
 import threading
 from time import sleep
@@ -191,14 +192,13 @@ class AsyncSmartUpdater(object):
         while not self._exit or (not self._cancel_pending_jobs and self.__any_queue_with_elements()):
             # Let's gather all the updates from the queue to serialize them
             sleep(UPDATE_INTERVAL)
-
             for queue in self.queues_priorities:
 
                 if self.__queue_with_higher_priority_waiting(queue):
                     break  # This forces the loop to start running through the most priority queues again.
 
                 gathered_elements = []
-                futures = []
+                futures = {}
                 queue_empty = False
 
                 while not queue_empty:
@@ -215,14 +215,14 @@ class AsyncSmartUpdater(object):
 
                     # This is the smart action: we combine several requests into one
                     if len(gathered_elements) > ps-1:
-                        futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
+                        futures[pool.submit(self.__do_update, queue_types[queue], gathered_elements)] = len(gathered_elements)
                         gathered_elements = []
 
                 if len(gathered_elements) > 0:
-                    futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
+                    futures[pool.submit(self.__do_update, queue_types[queue], gathered_elements)] = len(gathered_elements)
 
-                concurrent.futures.wait(futures)
-                self._decrease_tasks_pending_counter(len(futures))
+                for future in concurrent.futures.as_completed(futures):
+                    self._decrease_tasks_pending_counter(futures[future])
 
     def queues_busy(self):
         return self.tasks_pending > 0

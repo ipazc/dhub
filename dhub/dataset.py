@@ -241,7 +241,6 @@ class Dataset(APIWrapper):
             if self.smart_updater.is_element_update_queued(ids):
                 self.smart_updater.wait_for_elements_update(ids)
 
-
     def __getitem__(self, key):
         if type(key) is not slice and len(str(key)) < 8:
             key = int(key)
@@ -545,4 +544,58 @@ class Dataset(APIWrapper):
     def sync(self):
         if self.smart_updater is not None:
             while self.smart_updater.queues_busy():
+                print("\rTasks pending: {}".format(self.smart_updater.tasks_pending), end="", flush=True)
                 sleep(1)
+
+    def load_from_folder(self, folder):
+        self.clear()
+
+        pyfolder = PyFolder(folder)
+
+        if "metadata.json" in pyfolder:
+            metadata = self.__load_json(pyfolder)
+        elif "metadata.csv" in pyfolder:
+            metadata = self.__load_csv(pyfolder)
+        else:
+            raise FileNotFoundError("No metadata.json or metadata.csv found.")
+
+        content_available = "content" in pyfolder
+
+        if not content_available:
+            content_folder = None
+            print("Warning: elements do not have content associated.")
+        else:
+            # We don't want PyFolder to interpret the elements of the dataset.
+            content_folder = PyFolder(pyfolder["content"].folder_root, interpret=False)
+
+        elements = []
+        for key, values in metadata.items():
+
+            element = {k: v for k, v in values.items() if k != "id"}
+
+            if content_available:
+                element['content'] = content_folder[key]
+
+            elements.append(element)
+
+        self.add_elements(elements)
+
+        print("Uploading elements...")
+        self.sync()
+        print("\rFinished uploading.")
+
+    def __load_json(self, pyfolder):
+        return pyfolder["metadata.json"]
+
+    def __load_csv(self, pyfolder):
+        content = pyfolder["metadata.csv"].split("\n")
+        headers = content[0].split(",")
+        data = content[1:]
+
+        result = {}
+        for line in data:
+            values = {k: v for k, v in zip(headers[1:], line[1:])}
+            values['tags'] = values['tags'].split(";")
+            result[line[0]] = values
+
+        return result
