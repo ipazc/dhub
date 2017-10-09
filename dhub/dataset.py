@@ -346,10 +346,13 @@ class Dataset(APIWrapper):
         destination.refresh()
         return destination[result['url_prefix']]
 
-    def filter_iter(self, options):
+    def filter_iter(self, options=None, cache_content=False):
         """
         :return:
         """
+        if options is None:
+            options = {}
+
         ps = self.server_info['Page-Size']
         number_of_pages = len(self) // ps + int(len(self) % ps > 0)
 
@@ -364,16 +367,20 @@ class Dataset(APIWrapper):
 
             elements = buffer.result()
 
-            future = pool_content.submit(self.__retrieve_segment_contents, [element.get_id() for element in elements])
+            if cache_content:
+                future = pool_content.submit(self.__retrieve_segment_contents, [element.get_id() for element in elements])
+            else:
+                future = None
 
             for element in elements:
-                element.content_promise = future
+                if cache_content:
+                    element.content_promise = future
                 yield element
 
             buffer = buffer2
 
     def __iter__(self) -> Element:
-        for element in self.filter_iter(None):
+        for element in self.filter_iter():
             yield element
 
     def _get_key(self, key_index):
