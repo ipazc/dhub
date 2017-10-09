@@ -22,7 +22,7 @@
 
 import concurrent
 from concurrent.futures import ThreadPoolExecutor
-from queue import Queue
+from queue import Queue, Empty
 import threading
 from time import sleep
 from pyzip import PyZip
@@ -30,9 +30,12 @@ from pyzip import PyZip
 __author__ = 'Iván de Paz Centeno'
 
 pool = ThreadPoolExecutor(4)
-UPDATE_INTERVAL = 1 #seconds
+UPDATE_INTERVAL = 1  # seconds
+
 
 class AsyncSmartUpdater(object):
+
+    __tasks_pending = 0
 
     def __init__(self, server_info, api_wrapper_owner):
         self.server_info = server_info
@@ -40,7 +43,7 @@ class AsyncSmartUpdater(object):
         self.content_put_queue = Queue()
         self.element_update_queue = Queue()
         self.queues_priorities = [self.element_update_queue, self.content_put_queue]
-        self.queues_cache = {'element_update':{}, 'content_update':{}}
+        self.queues_cache = {'element_update': {}, 'content_update': {}}
         self.__exit = False
         self.__cancel_pending_jobs = False
         self.lock = threading.Lock()
@@ -53,10 +56,23 @@ class AsyncSmartUpdater(object):
             exit_value = self.__exit
         return exit_value
 
-    @_exit.setter
-    def _exit(self, do_exit=True):
+    @property
+    def tasks_pending(self):
         with self.lock:
-            self.__exit = do_exit
+            return self.__tasks_pending
+
+    def _increase_tasks_pending_counter(self, by=1):
+        with self.lock:
+            self.__tasks_pending += by
+
+    def _decrease_tasks_pending_counter(self, by=1):
+        with self.lock:
+            self.__tasks_pending -= by
+
+    @tasks_pending.setter
+    def tasks_pending(self, __tasks_pending):
+        with self.lock:
+            self.__tasks_pending = __tasks_pending
 
     @property
     def _cancel_pending_jobs(self):
@@ -71,7 +87,7 @@ class AsyncSmartUpdater(object):
 
     def __queue_with_higher_priority_waiting(self, queue):
         """
-        Checks if is there any queue with higher priority waiting than the speicified queue.
+        Checks if is there any queue with higher priority waiting than the specified queue.
         :param queue: queue to check from
         :return: boolean True if there is at least one queue with higher priority waiting. False otherwise.
         """
@@ -170,7 +186,7 @@ class AsyncSmartUpdater(object):
 
     def _thread_func(self):
         ps = self.server_info['Page-Size']
-        queue_types = {self.content_put_queue:'binary', self.element_update_queue: 'json'}
+        queue_types = {self.content_put_queue: 'binary', self.element_update_queue: 'json'}
 
         while not self._exit or (not self._cancel_pending_jobs and self.__any_queue_with_elements()):
             # Let's gather all the updates from the queue to serialize them
@@ -179,21 +195,26 @@ class AsyncSmartUpdater(object):
             for queue in self.queues_priorities:
 
                 if self.__queue_with_higher_priority_waiting(queue):
-                    break # This forces the loop to start running through the most priority queues again.
+                    break  # This forces the loop to start running through the most priority queues again.
 
                 gathered_elements = []
-
                 futures = []
-                while queue.qsize() > 0:
+                queue_empty = False
 
-                    # Check that queues with highest priority are not
+                while not queue_empty:
+
+                    # Check that queues with highest priority are not waiting
                     if self.__queue_with_higher_priority_waiting(queue):
                         break  # This forces the loop to start running through the most priority queues again.
 
-                    gathered_elements.append(queue.get())
+                    try:
+                        element = queue.get(block=False)
+                        gathered_elements.append(element)
+                    except Empty as ex:
+                        queue_empty = True
 
                     # This is the smart action: we combine several requests into one
-                    if len(gathered_elements) >= ps:
+                    if len(gathered_elements) > ps-1:
                         futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
                         gathered_elements = []
 
@@ -201,9 +222,10 @@ class AsyncSmartUpdater(object):
                     futures.append(pool.submit(self.__do_update, queue_types[queue], gathered_elements))
 
                 concurrent.futures.wait(futures)
+                self._decrease_tasks_pending_counter(len(futures))
 
     def queues_busy(self):
-        return self.content_put_queue.qsize() > 0 or self.element_update_queue.qsize() > 0
+        return self.tasks_pending > 0
 
     def __do_update(self, request_kind, elements):
         if len(elements) > 0:
@@ -249,11 +271,13 @@ class AsyncSmartUpdater(object):
         return True
 
     def queue_update(self, url, element_id, kwargs):
+        self._increase_tasks_pending_counter()
         with self.lock:
             self.queues_cache["element_update"][element_id] = None
         self.element_update_queue.put([url, element_id, kwargs])
 
     def queue_content_update(self, url, element_id, content):
+        self._increase_tasks_pending_counter()
         with self.lock:
             self.queues_cache["content_update"][element_id] = None
         self.content_put_queue.put([url, element_id, content])
