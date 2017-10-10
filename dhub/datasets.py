@@ -109,14 +109,14 @@ class Datasets(APIWrapper):
         :rtype: Dataset
         :return:
         """
-        for url, d in self.datasets.items():
-            yield d
+        for key in self.keys():
+            yield self[key]
 
     def keys(self):
         return list(self.datasets.keys())
 
     def values(self):
-        return list(self.datasets.values())
+        return [s for s in self]
 
     def refresh(self):
         self.datasets = {d['url_prefix']: dict(definition=d, token=self.token, token_info=self.token_info, server_info=self.server_info) for d in self._get_json("datasets")}
