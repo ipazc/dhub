@@ -527,7 +527,8 @@ class Dataset(APIWrapper):
         dataset_data = self._get_json("datasets/{}".format(self.get_url_prefix()))
         self.elements_count = dataset_data['elements_count']
         self.comments_count = dataset_data['comments_count']
-        self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags']}
+        self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags',
+                                                  'fork_count', 'fork_father']}
 
     def clear(self):
         ps = self.server_info['Page-Size']
