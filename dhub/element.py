@@ -103,7 +103,7 @@ class Element(APIWrapper):
             self.cached_content = None
 
         if self.cached_content is None:
-            content = self._retrieve_content()
+            content = self._retrieve_content()[self._id]
         else:
             content = self.cached_content
 
