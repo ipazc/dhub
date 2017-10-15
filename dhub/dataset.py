@@ -80,12 +80,14 @@ class Dataset(APIWrapper):
 
     def __repr__(self):
 
-        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}; fork_father: {}, fork_count: {}".format(self.get_title(), len(self),
+        return "Dataset {} ({} elements); tags: {}; description: {}; reference: {}; fork_father: {}, fork_count: {}, size: {}".format(self.get_title(), len(self),
                                                                                            self.get_tags(),
                                                                                            self.get_description(),
                                                                                            self.get_reference(),
                                                                                            self.get_fork_father(),
-                                                                                           self.get_fork_count())
+                                                                                           self.get_fork_count(),
+                                                                                           self.get_size())
+
 
     def set_binary_interpreter(self, binary_interpreter):
         self.binary_interpreter = binary_interpreter
@@ -107,6 +109,9 @@ class Dataset(APIWrapper):
 
     def get_tags(self):
         return self.data['tags']
+
+    def get_size(self):
+        return self.data['size']
 
     def get_reference(self):
         return self.data['reference']
@@ -135,6 +140,7 @@ class Dataset(APIWrapper):
                       server_info=server_info)
         dataset.data['fork_count'] = definition['fork_count']
         dataset.data['fork_father'] = definition['fork_father']
+        dataset.data['size'] = definition['size']
         dataset.comments_count = definition['comments_count']
         dataset.elements_count = definition['elements_count']
         return dataset
@@ -367,6 +373,9 @@ class Dataset(APIWrapper):
 
             elements = buffer.result()
 
+            if len(elements) == 0:
+                break
+
             if cache_content:
                 future = pool_content.submit(self.__retrieve_segment_contents, [element.get_id() for element in elements])
             else:
@@ -435,6 +444,8 @@ class Dataset(APIWrapper):
                 content += "'{}': {}".format(key, data[key])
             else:
                 content += "'{}': \'{}\'".format(key, data[key])
+
+        content += "'{}': {} MB".format('size', round(int(data['size'])/1024/1024, 3))
         content += "}"
 
         return result.format(content)
