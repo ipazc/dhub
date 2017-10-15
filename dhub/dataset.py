@@ -558,6 +558,8 @@ class Dataset(APIWrapper):
             while self.smart_updater.queues_busy():
                 print("\rTasks pending: {}".format(self.smart_updater.tasks_pending), end="", flush=True)
                 sleep(1)
+            print("\rTasks pending: {}".format(self.smart_updater.tasks_pending), end="", flush=True)
+        print("\n")
 
     def load_from_folder(self, folder):
         self.clear()

@@ -115,6 +115,9 @@ class Element(APIWrapper):
     def set_content(self, content, interpret=True):
         if self.binary_interpreter is not None and interpret:
             content = self.binary_interpreter.decipher(content)
+        else:
+            if type(content) is not bytes:
+                raise Exception("Bytes are required as content.")
 
         if content == self.cached_content:
             return False

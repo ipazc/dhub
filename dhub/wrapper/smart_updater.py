@@ -62,6 +62,11 @@ class AsyncSmartUpdater(object):
         with self.lock:
             return self.__tasks_pending
 
+    @tasks_pending.setter
+    def tasks_pending(self, __tasks_pending):
+        with self.lock:
+            self.__tasks_pending = __tasks_pending
+
     def _increase_tasks_pending_counter(self, by=1):
         with self.lock:
             self.__tasks_pending += by
@@ -69,11 +74,6 @@ class AsyncSmartUpdater(object):
     def _decrease_tasks_pending_counter(self, by=1):
         with self.lock:
             self.__tasks_pending -= by
-
-    @tasks_pending.setter
-    def tasks_pending(self, __tasks_pending):
-        with self.lock:
-            self.__tasks_pending = __tasks_pending
 
     @property
     def _cancel_pending_jobs(self):
@@ -255,7 +255,8 @@ class AsyncSmartUpdater(object):
                         del self.queues_cache['element_update'][element_id]
 
         else: # request_kind == "binary":
-            self.api_wrapper_owner._put_binary(url, extra_data=None, binary=PyZip(kwargs_list).to_bytes())
+            content = PyZip(kwargs_list).to_bytes()
+            self.api_wrapper_owner._put_binary(url, extra_data=None, binary=content)
             for [_, element_id, _] in elements:
                 event = self.queues_cache['content_update'][element_id]
                 """
