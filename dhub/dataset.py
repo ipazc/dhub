@@ -597,6 +597,7 @@ class Dataset(APIWrapper):
             if batch_size >= 1*1024*1024*1024:  # each 1 GB, perform upload.
                 print("* Uploading elements...")
                 self.add_elements(elements)
+                batch_size = 0
                 elements = []
                 self.sync()
 
