@@ -148,6 +148,9 @@ class Element(APIWrapper):
     def __str__(self):
         return "{} {}".format(self._id, str(self.data))
 
+    def __repr__(self):
+        return "[{}] {}".format(self._id, str(self.data))
+
     @classmethod
     def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None, token_info=None, server_info=None,
                   smart_updater=None):

@@ -123,3 +123,6 @@ class Datasets(APIWrapper):
 
     def __str__(self):
         return str(self.keys())
+
+    def __repr__(self):
+        return "[{}] {}".format(self.api_url, str(self))

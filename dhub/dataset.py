@@ -446,7 +446,7 @@ class Dataset(APIWrapper):
             else:
                 content += "'{}': \'{}\'".format(key, data[key])
 
-        content += "'{}': {} MB".format('size', round(int(data['size'])/1024/1024, 3))
+        content += ", '{}': {} MB".format('size', round(int(data['size'])/1024/1024, 3))
         content += "}"
 
         return result.format(content)

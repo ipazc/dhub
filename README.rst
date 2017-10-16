@@ -1,5 +1,5 @@
 ===============
-DHUB 0.0.2
+DHUB 0.0.3
 ===============
 
 `DHub` is a dataset storage hub client. It is intended to be a standard tool for hosting and managing Machine Learning datasets.
