@@ -554,13 +554,16 @@ class Dataset(APIWrapper):
         if self.smart_updater is not None:
             self.smart_updater.stop(cancel_pending_jobs=force)
 
-    def sync(self):
+    def sync(self, update_size=True):
         if self.smart_updater is not None:
             while self.smart_updater.queues_busy():
                 print("\rTasks pending: {}         ".format(self.smart_updater.tasks_pending), end="", flush=True)
                 sleep(1)
             print("\rTasks pending: {}         ".format(self.smart_updater.tasks_pending), end="", flush=True)
         print("\n")
+
+        if update_size:
+            self.__update_size()
 
     def load_from_folder(self, folder):
         self.clear()
@@ -600,7 +603,7 @@ class Dataset(APIWrapper):
                 self.add_elements(elements)
                 batch_size = 0
                 elements = []
-                self.sync()
+                self.sync(update_size=False)
 
         if len(elements) > 0:
             self.add_elements(elements)
@@ -624,3 +627,7 @@ class Dataset(APIWrapper):
             result[line[0]] = values
 
         return result
+
+    def __update_size(self):
+        size = self._get_json("datasets/{}/size".format(self.get_url_prefix()))
+        self.data['size'] = size
