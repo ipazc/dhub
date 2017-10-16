@@ -60,6 +60,7 @@ class Dataset(APIWrapper):
         self.data['description'] = description
         self.data['tags'] = tags
         self.data['reference'] = reference
+        self.data['size'] = 0
         self.elements_count = 0
         self.comments_count = 0
         self.page_cache = {}
@@ -539,7 +540,7 @@ class Dataset(APIWrapper):
         self.elements_count = dataset_data['elements_count']
         self.comments_count = dataset_data['comments_count']
         self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags',
-                                                  'fork_count', 'fork_father']}
+                                                  'fork_count', 'fork_father', 'size']}
 
     def clear(self):
         ps = self.server_info['Page-Size']
