@@ -556,9 +556,9 @@ class Dataset(APIWrapper):
     def sync(self):
         if self.smart_updater is not None:
             while self.smart_updater.queues_busy():
-                print("\rTasks pending: {}".format(self.smart_updater.tasks_pending), end="", flush=True)
+                print("\rTasks pending: {}         ".format(self.smart_updater.tasks_pending), end="", flush=True)
                 sleep(1)
-            print("\rTasks pending: {}".format(self.smart_updater.tasks_pending), end="", flush=True)
+            print("\rTasks pending: {}         ".format(self.smart_updater.tasks_pending), end="", flush=True)
         print("\n")
 
     def load_from_folder(self, folder):
@@ -583,16 +583,25 @@ class Dataset(APIWrapper):
             content_folder = PyFolder(pyfolder["content"].folder_root, interpret=False)
 
         elements = []
+        batch_size = 0
         for key, values in metadata.items():
 
             element = {k: v for k, v in values.items() if k != "id"}
 
             if content_available:
                 element['content'] = content_folder[key]
+                batch_size += element['content']
 
             elements.append(element)
 
-        self.add_elements(elements)
+            if batch_size >= 1*1024*1024*1024:  # each 1 GB, perform upload.
+                print("* Uploading elements...")
+                self.add_elements(elements)
+                elements = []
+                self.sync()
+
+        if len(elements) > 0:
+            self.add_elements(elements)
 
         print("Uploading elements...")
         self.sync()
