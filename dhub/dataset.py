@@ -590,7 +590,7 @@ class Dataset(APIWrapper):
 
             if content_available:
                 element['content'] = content_folder[key]
-                batch_size += element['content']
+                batch_size += len(element['content'])
 
             elements.append(element)
 
