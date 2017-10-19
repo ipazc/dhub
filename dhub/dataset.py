@@ -341,6 +341,9 @@ class Dataset(APIWrapper):
     def fork(self, new_prefix: str, title: str=None, description: str=None, tags: list=None, reference: str=None,
              destination=None, options: dict=None):
 
+        if destination is None:
+            destination = self
+
         arguments = {
                         'title': title,
                         'description': description,
