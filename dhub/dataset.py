@@ -43,7 +43,7 @@ pool_content = ThreadPoolExecutor(4)
 class Dataset(APIWrapper):
     def __init__(self, url_prefix: str, title: str, description: str, reference: str, tags: list, token: str=None,
                  binary_interpreter: Interpreter=None, token_info: dict=None, server_info: dict=None,
-                 use_smart_updater: AsyncSmartUpdater=True):
+                 use_smart_updater: AsyncSmartUpdater=True, owner=None):
         self.data = {}
 
         self.binary_interpreter = binary_interpreter
@@ -65,6 +65,8 @@ class Dataset(APIWrapper):
         self.comments_count = 0
         self.page_cache = {}
         self.last_cache_time = now()
+        self.owner = owner
+
         super().__init__(token, token_info=token_info, server_info=server_info)
 
         # Server_info is only available after super() init.
@@ -134,11 +136,11 @@ class Dataset(APIWrapper):
                          json_data={k: v for k, v in self.data.items() if k != "url_prefix"})
 
     @classmethod
-    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None):
+    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None, owner=None):
 
         dataset = cls(definition['url_prefix'], definition['title'], definition['description'], definition['reference'],
                       definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info,
-                      server_info=server_info)
+                      server_info=server_info, owner=owner)
         dataset.data['fork_count'] = definition['fork_count']
         dataset.data['fork_father'] = definition['fork_father']
         dataset.data['size'] = definition['size']
@@ -342,7 +344,7 @@ class Dataset(APIWrapper):
              destination=None, options: dict=None):
 
         if destination is None:
-            destination = self
+            destination = self.owner
 
         arguments = {
                         'title': title,

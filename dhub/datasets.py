@@ -65,6 +65,7 @@ class Datasets(APIWrapper):
 
             if type(result) is dict:
                 result = Dataset.from_dict(**result)
+                self.datasets[item] = result
 
         return result
 
@@ -88,20 +89,8 @@ class Datasets(APIWrapper):
         self.refresh()
 
     def __delitem__(self, key):
-        try:
-            index = int(key)
-            item_key = self.keys()[index]
-        except ValueError as ex:
-            item_key = None
-            pass
-
-        if item_key is None:
-            if key not in self.keys():
-                return
-            else:
-                item_key = key
-
-        self._delete_json("datasets/{}".format(item_key))
+        dataset = self[key]
+        self._delete_json("datasets/{}".format(dataset.get_url_prefix()))
         self.refresh()
 
     def __iter__(self):
@@ -119,10 +108,19 @@ class Datasets(APIWrapper):
         return [s for s in self]
 
     def refresh(self):
-        self.datasets = {d['url_prefix']: dict(definition=d, token=self.token, token_info=self.token_info, server_info=self.server_info) for d in self._get_json("datasets")}
+        self.datasets = {d['url_prefix']: dict(definition=d, token=self.token, token_info=self.token_info, server_info=self.server_info, owner=self) for d in self._get_json("datasets")}
 
     def __str__(self):
         return str(self.keys())
 
     def __repr__(self):
         return "[{}] {}".format(self.api_url, str(self))
+
+    def __contains__(self, item):
+        # Let's do smart things over here.
+        if item not in self.keys():
+            closest_name = self.find_closest(item)
+            if closest_name is not None:
+                item = closest_name
+
+        return item in self.keys()
