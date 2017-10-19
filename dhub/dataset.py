@@ -338,7 +338,9 @@ class Dataset(APIWrapper):
                                   server_info=self.server_info, smart_updater=self.smart_updater) for element in
                 self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page}, json_data={'options': filter_options})]
 
-    def fork(self, new_prefix:str, title:str, description:str, tags:list, reference:str, destination, options:dict=None):
+    def fork(self, new_prefix: str, title: str=None, description: str=None, tags: list=None, reference: str=None,
+             destination=None, options: dict=None):
+
         arguments = {
                         'title': title,
                         'description': description,
