@@ -251,10 +251,22 @@ class Dataset(APIWrapper):
                 self.smart_updater.wait_for_elements_update(ids)
 
     def __getitem__(self, key):
-        if type(key) is not slice and type(key) is int:
-            key = int(key)
+        options = None
+
+        if type(key) is dict:
+            options = key
+            if 'slice' in options:
+                key = options['slice']
+                if (type(key) is int and key < 0) or (type(key) is slice and key.stop < 0):
+                    raise ValueError("Negative indexes not allowed when retrieving elements with options. Use filter_iter() instead")
+
+                del options['slice']
+            else:
+                key = 0
+
+        if type(key) is int:
             if key < 0:
-                key = len(self) + key
+                key += len(self)
             key = slice(key, key + 1, 1)
 
         elements = []
@@ -269,11 +281,13 @@ class Dataset(APIWrapper):
 
             ps = self.server_info['Page-Size']
 
-            ids = [self._get_key(i) for i in range(start, stop, step)]
+            ids = []
+            for i in range(start, stop, step):
+                ids.append(self._get_key(i, options=options))
 
             self.__wait_for_elements_ready(ids)
 
-            futures = [pool_keys.submit(self._request_segment, ids) for segment in segments(ids, ps)]
+            futures = [pool_keys.submit(self._request_segment, segment) for segment in segments(ids, ps)]
 
             elements = []
 
@@ -306,10 +320,17 @@ class Dataset(APIWrapper):
         return result
 
     def __delitem__(self, key):
-        if type(key) is not slice and type(key) is not int:
-            key = int(key)
+        options = None
+
+        if type(key) is dict:
+            options = key
+            if 'slice' in options:
+                key = options['slice']
+                del options['slice']
+
+        if type(key) is int:
             if key < 0:
-                key = len(self) + key
+                key += len(self)
             key = slice(key, key + 1, 1)
 
         ids = []
@@ -324,7 +345,7 @@ class Dataset(APIWrapper):
 
             ps = self.server_info['Page-Size']
 
-            ids = [self._get_key(i) for i in range(start, stop, step)]
+            ids = [self._get_key(i, options=options) for i in range(start, stop, step)]
 
         elif type(key) is str:
                 ids = [key]
@@ -404,21 +425,27 @@ class Dataset(APIWrapper):
         for element in self.filter_iter():
             yield element
 
-    def _get_key(self, key_index):
+    def _get_key(self, key_index, options=None):
         ps = int(self.server_info['Page-Size'])
         key_page = key_index // ps
         index = key_index % ps
 
+        dumped_options = json.dumps(options)
+
+        if json.dumps(options) not in self.page_cache:
+            self.page_cache[dumped_options] = {}
+
         try:
             if (now() - self.last_cache_time).total_seconds() > CACHE_TIME:
-                self.page_cache.clear()
+                self.page_cache[dumped_options].clear()
 
-            page = self.page_cache[key_page]
+            page = self.page_cache[dumped_options][key_page]
 
         except KeyError as ex:
             # Cache miss
-            page = self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': key_page})
-            self.page_cache[key_page] = page
+            page = self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': key_page},
+                                                                                        json_data={'options': options})
+            self.page_cache[dumped_options][key_page] = page
             self.last_cache_time = now()
 
         return page[index]['_id']
@@ -444,7 +471,7 @@ class Dataset(APIWrapper):
 
         result = "[{}]".format(url_prefix)
         result += " {}"
-        content ="{"
+        content = "{"
         first = True
         for key in order_keys:
             if first:
