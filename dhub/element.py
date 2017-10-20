@@ -86,6 +86,49 @@ class Element(APIWrapper):
         self.data['tags'] = new_tags
         self.update()
 
+    def get_tag(self, tag_name):
+        tags = self.get_tags()
+        result = ""
+
+        for tag in tags:
+            if tag_name in tag:
+                if type(tag) is dict:
+                    result = tag[tag_name]
+
+                elif type(tag) is str:
+                    if ":" in tag:
+                        result = tag.split(":")[1].strip()
+                    else:
+                        result = tag
+                break
+
+        return result
+
+    def set_tag(self, tag_name, tag_value):
+        tags = self.get_tags()
+        found = False
+
+        for index, tag in zip(range(len(tags)), tags):
+            if tag_name in tag:
+                if type(tag) is dict:
+                    tag[tag_name] = tag_value
+                    found = True
+
+                elif type(tag) is str:
+                    tags[index] = '{}: {}'.format(tag_name, tag_value)
+                    found = True
+
+                break
+
+        if not found:
+            if tag_name is None:
+                tags.append(tag_value)
+            else:
+                tags.append({tag_name: tag_value})
+
+        self.set_tags(tags)
+        return found
+
     def set_ref(self, new_http_ref):
         self.data['http_ref'] = new_http_ref
         self.update()
