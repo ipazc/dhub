@@ -251,8 +251,10 @@ class Dataset(APIWrapper):
                 self.smart_updater.wait_for_elements_update(ids)
 
     def __getitem__(self, key):
-        if type(key) is not slice and len(str(key)) < 8:
+        if type(key) is not slice and type(key) is int:
             key = int(key)
+            if key < 0:
+                key = len(self) + key
             key = slice(key, key + 1, 1)
 
         elements = []
@@ -304,8 +306,10 @@ class Dataset(APIWrapper):
         return result
 
     def __delitem__(self, key):
-        if type(key) is not slice and len(str(key)) < 8:
+        if type(key) is not slice and type(key) is not int:
             key = int(key)
+            if key < 0:
+                key = len(self) + key
             key = slice(key, key + 1, 1)
 
         ids = []
