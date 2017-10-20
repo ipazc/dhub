@@ -326,7 +326,12 @@ class Dataset(APIWrapper):
             options = key
             if 'slice' in options:
                 key = options['slice']
+                if (type(key) is int and key < 0) or (type(key) is slice and key.stop < 0):
+                    raise ValueError("Negative indexes not allowed when retrieving elements with options. Use filter_iter() instead")
+
                 del options['slice']
+            else:
+                key = 0
 
         if type(key) is int:
             if key < 0:
