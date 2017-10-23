@@ -91,15 +91,21 @@ class Element(APIWrapper):
         result = ""
 
         for tag in tags:
-            if tag_name in tag:
-                if type(tag) is dict:
+            if type(tag) is dict:
+                if tag_name in tag:
                     result = tag[tag_name]
 
-                elif type(tag) is str:
-                    if ":" in tag:
-                        result = tag.split(":")[1].strip()
-                    else:
+            elif type(tag) is str:
+
+                if ":" in tag:
+                    splits = tag.split(":")
+                    if splits[0].strip() == tag_name:
+                        result = splits[1]
+                else:
+                    if tag in tag_name:
                         result = tag
+
+            if result != "":
                 break
 
         return result
