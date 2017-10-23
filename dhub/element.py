@@ -100,7 +100,7 @@ class Element(APIWrapper):
                 if ":" in tag:
                     splits = tag.split(":")
                     if splits[0].strip() == tag_name:
-                        result = splits[1]
+                        result = splits[1].lstrip()
                 else:
                     if tag in tag_name:
                         result = tag
