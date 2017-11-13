@@ -584,6 +584,7 @@ class Dataset(APIWrapper):
         self.comments_count = dataset_data['comments_count']
         self.data = {k: dataset_data[k] for k in ['url_prefix', 'title', 'description', 'reference', 'tags',
                                                   'fork_count', 'fork_father', 'size']}
+        self.page_cache = {}  # clearing the cache to avoid errors
 
     def clear(self):
         ps = self.server_info['Page-Size']

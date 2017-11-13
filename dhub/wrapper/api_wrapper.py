@@ -118,7 +118,7 @@ class APIWrapper(object):
         return self.__do_json_request(requests.get, rel_url, extra_data, json_data).content
 
     def _put_binary(self, rel_url, extra_data=None, binary=None):
-        return self.__do_json_request(requests.get, rel_url, extra_data, binary_data=binary).json()
+        return self.__do_json_request(requests.put, rel_url, extra_data, binary_data=binary).json()
 
     def _post_json(self, rel_url, extra_data=None, json_data=None):
         return self.__do_json_request(requests.post, rel_url, extra_data, json_data).json()
