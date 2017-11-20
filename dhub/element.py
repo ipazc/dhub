@@ -35,8 +35,9 @@ upload_pool = ThreadPoolExecutor(4)
 class Element(APIWrapper):
 
     def __init__(self, title, description, tags, http_ref, id=None, dataset_owner=None, token=None,
-                 binary_interpreter=None, token_info=None, server_info=None, smart_updater:AsyncSmartUpdater=None):
-        super().__init__(token, token_info=token_info, server_info=server_info)
+                 binary_interpreter=None, token_info=None, server_info=None, smart_updater:AsyncSmartUpdater=None,
+                 api_url=None):
+        super().__init__(token, token_info=token_info, server_info=server_info, api_url=api_url)
         self.data = {'title': title, 'description': description, 'tags': tags, 'http_ref': http_ref}
         self.has_content = False
         self.dataset_owner = dataset_owner
@@ -202,12 +203,12 @@ class Element(APIWrapper):
 
     @classmethod
     def from_dict(cls, definition, dataset_owner, token, binary_interpreter=None, token_info=None, server_info=None,
-                  smart_updater=None):
+                  smart_updater=None, api_url=None):
 
         element = cls(definition['title'], definition['description'], definition['tags'],
                       definition['http_ref'], id=definition['_id'], token=token,
                       binary_interpreter=binary_interpreter, dataset_owner=dataset_owner, token_info=token_info, server_info=server_info,
-                      smart_updater=smart_updater)
+                      smart_updater=smart_updater, api_url=api_url)
 
         element.comments_count = definition['comments_count']
         element.has_content = definition['has_content']

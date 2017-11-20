@@ -21,4 +21,4 @@
 # MA  02110-1301, USA.
 
 __author__ = 'Iván de Paz Centeno'
-__version__ = '0.0.13'
+__version__ = '0.0.14'

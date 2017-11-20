@@ -27,14 +27,14 @@ from dhub.wrapper.api_wrapper import APIWrapper
 __author__ = 'Iván de Paz Centeno'
 
 class Datasets(APIWrapper):
-    def __init__(self, token_id=None):
+    def __init__(self, token_id=None, api_url=None):
 
         try:
             token = dhubrc.lookup_token(token_id)
         except KeyError as ex:
             token = token_id
 
-        super().__init__(token)
+        super().__init__(token, api_url=api_url)
         self.refresh()
 
     def __len__(self):
@@ -64,12 +64,18 @@ class Datasets(APIWrapper):
             result = self.datasets[item]
 
             if type(result) is dict:
+                result['api_url'] = self.api_url
                 result = Dataset.from_dict(**result)
                 self.datasets[item] = result
 
         return result
 
-    def add_dataset(self, url_prefix, title, description, reference, tags) -> Dataset:
+    def add_dataset(self, url_prefix, title=None, description=None, reference=None, tags=None) -> Dataset:
+        if title is None: title = "Unnamed dataset"
+        if description is None: description = ""
+        if reference is None: reference = ""
+        if tags is None: tags = []
+
         result = self._post_json("datasets", json_data={
             'title': title,
             'description': description,

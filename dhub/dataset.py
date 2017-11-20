@@ -43,7 +43,7 @@ pool_content = ThreadPoolExecutor(4)
 class Dataset(APIWrapper):
     def __init__(self, url_prefix: str, title: str, description: str, reference: str, tags: list, token: str=None,
                  binary_interpreter: Interpreter=None, token_info: dict=None, server_info: dict=None,
-                 use_smart_updater: AsyncSmartUpdater=True, owner=None):
+                 use_smart_updater: AsyncSmartUpdater=True, owner=None, api_url=None):
         self.data = {}
 
         self.binary_interpreter = binary_interpreter
@@ -67,7 +67,7 @@ class Dataset(APIWrapper):
         self.last_cache_time = now()
         self.owner = owner
 
-        super().__init__(token, token_info=token_info, server_info=server_info)
+        super().__init__(token, token_info=token_info, server_info=server_info, api_url=api_url)
 
         # Server_info is only available after super() init.
         if use_smart_updater:
@@ -136,11 +136,11 @@ class Dataset(APIWrapper):
                          json_data={k: v for k, v in self.data.items() if k != "url_prefix"})
 
     @classmethod
-    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None, owner=None):
+    def from_dict(cls, definition, token, binary_interpreter=None, token_info=None, server_info=None, owner=None, api_url=None):
 
         dataset = cls(definition['url_prefix'], definition['title'], definition['description'], definition['reference'],
                       definition['tags'], token=token, binary_interpreter=binary_interpreter, token_info=token_info,
-                      server_info=server_info, owner=owner)
+                      server_info=server_info, owner=owner, api_url=api_url)
         dataset.data['fork_count'] = definition['fork_count']
         dataset.data['fork_father'] = definition['fork_father']
         dataset.data['size'] = definition['size']
@@ -148,7 +148,10 @@ class Dataset(APIWrapper):
         dataset.elements_count = definition['elements_count']
         return dataset
 
-    def add_element(self, title: str, description: str, tags: list, http_ref: str, content, interpret=True) -> Element:
+    def add_element(self, title: str, content, description: str=None, tags: list=None, http_ref: str=None, interpret=True) -> Element:
+        if description is None: description = ""
+        if tags is None: tags = []
+        if http_ref is None: http_ref = ""
 
         if type(content) is str:
             # content is a URI
@@ -160,7 +163,7 @@ class Dataset(APIWrapper):
 
             if self.binary_interpreter is None:
                 content = content_bytes
-            else:
+            elif interpret:
                 content = self.binary_interpreter.cipher(content_bytes)
 
         result = self._post_json("datasets/{}/elements".format(self.get_url_prefix()), json_data={
@@ -175,7 +178,7 @@ class Dataset(APIWrapper):
         element.set_content(content, interpret)
         return element
 
-    def add_elements(self, add_element_kwargs_list: list) -> list:
+    def add_elements(self, add_element_kwargs_list: list, interpret=True) -> list:
         # we need to preprocess the argument
         post_kwargs = []
         content_list = []
@@ -192,15 +195,32 @@ class Dataset(APIWrapper):
 
                 if self.binary_interpreter is None:
                     content = content_bytes
-                else:
+                elif interpret:
                     content = self.binary_interpreter.cipher(content_bytes)
 
             content_list.append(content)
 
-            post_kwargs.append({'title': element_kwargs['title'],
-                                'description': element_kwargs['description'],
-                                'tags': element_kwargs['tags'],
-                                'http_ref': element_kwargs['http_ref']})
+            title = element_kwargs['title']
+
+            try:
+                description = element_kwargs['description']
+            except KeyError:
+                description = ""
+
+            try:
+                tags = element_kwargs['tags']
+            except KeyError:
+                tags = []
+
+            try:
+                http_ref = element_kwargs['http_ref']
+            except KeyError:
+                http_ref = ""
+
+            post_kwargs.append({'title': title,
+                                'description': description,
+                                'tags': tags,
+                                'http_ref': http_ref})
 
         result = self._post_json("datasets/{}/elements/bundle".format(self.get_url_prefix()), json_data={
             'elements': post_kwargs
@@ -208,10 +228,10 @@ class Dataset(APIWrapper):
 
         self.refresh()
         elements = [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info,
-                                  server_info=self.server_info, smart_updater=self.smart_updater) for element in result]
+                                  server_info=self.server_info, smart_updater=self.smart_updater, api_url=self.api_url) for element in result]
 
         for element, content in zip(elements, content_list):
-            element.set_content(content)
+            element.set_content(content, interpret)
 
         return elements
 
@@ -223,7 +243,7 @@ class Dataset(APIWrapper):
         # Todo: reorder 'elements' to match the order of 'ids'
         elements = [
             Element.from_dict(result, self, self.token, self.binary_interpreter, token_info=self.token_info,
-                              server_info=self.server_info, smart_updater=self.smart_updater)
+                              server_info=self.server_info, smart_updater=self.smart_updater, api_url=self.api_url)
             for result in results
             ]
 
@@ -300,7 +320,7 @@ class Dataset(APIWrapper):
                 response = self._get_json("datasets/{}/elements/{}".format(self.get_url_prefix(), key))
                 element = Element.from_dict(response, self, self.token, self.binary_interpreter,
                                             token_info=self.token_info, server_info=self.server_info,
-                                            smart_updater=self.smart_updater)
+                                            smart_updater=self.smart_updater, api_url=self.api_url)
                 element.content_promise = pool_content.submit(element._retrieve_content)
                 elements = [element]
 
@@ -367,7 +387,7 @@ class Dataset(APIWrapper):
 
     def _get_elements(self, page, filter_options=None):
         return [Element.from_dict(element, self, self.token, self.binary_interpreter, token_info=self.token_info,
-                                  server_info=self.server_info, smart_updater=self.smart_updater) for element in
+                                  server_info=self.server_info, smart_updater=self.smart_updater, api_url=self.api_url) for element in
                 self._get_json("datasets/{}/elements".format(self.get_url_prefix()), extra_data={'page': page}, json_data={'options': filter_options})]
 
     def fork(self, new_prefix: str, title: str=None, description: str=None, tags: list=None, reference: str=None,
